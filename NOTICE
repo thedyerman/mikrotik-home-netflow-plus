@@ -1,0 +1,32 @@
+mikrotik-home-netflow-plus
+Copyright 2026 The mikrotik-home-netflow-plus authors
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product bundles or uses the following third-party material.
+
+Data
+  * MAC vendor table (internal/enrich/data/oui.tsv.gz), derived from the
+    public MA-L, MA-M and MA-S listings of the IEEE Registration Authority.
+    Refreshed with scripts/update-oui.py.
+  * IP to ASN Lite database by DB-IP (https://db-ip.com), licensed under
+    Creative Commons Attribution 4.0 International. It is not part of this
+    repository; the Dockerfile downloads it into the container image.
+
+Go modules (compiled into the binary)
+  * modernc.org/sqlite                      BSD-3-Clause
+  * github.com/coder/websocket              ISC
+  * github.com/oschwald/maxminddb-golang    ISC
+  * golang.org/x/net                        BSD-3-Clause
+
+Web interface (bundled into the binary)
+  * React and React DOM                     MIT
+  * uPlot                                   MIT
+  * d3-sankey                               BSD-3-Clause
+  * Inter typeface                          SIL Open Font License 1.1
+
+Trademarks
+  MikroTik and RouterOS are trademarks of Mikrotikls SIA. Docker is a
+  trademark of Docker, Inc. Raspberry Pi is a trademark of Raspberry Pi Ltd.
+  This project is not affiliated with or endorsed by any of them, nor by
+  Simple Docker Ops or DisplayOps.

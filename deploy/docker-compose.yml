@@ -1,0 +1,23 @@
+# mikrotik-home-netflow-plus on a Linux host with plain Docker Compose.
+#
+#   1. cp env.example .env && chmod 600 .env     then fill in the router details
+#   2. docker compose up -d
+#   3. open http://<this-host>:8080
+#
+# Host networking is used so flow packets arrive with the router's real source
+# address and no port mapping is needed (UDP 2055 for flows, TCP 8080 for the UI).
+#
+# To run a build of your own instead of the published image, build it with the
+# same name first:  docker build -t kcdyer/mikrotik-home-netflow-plus:1.1.0 ..
+services:
+  netflow:
+    image: kcdyer/mikrotik-home-netflow-plus:1.1.0
+    container_name: mikrotik-home-netflow-plus
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env
+    volumes:
+      - netflow-data:/data
+
+volumes:
+  netflow-data:

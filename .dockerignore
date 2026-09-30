@@ -1,0 +1,10 @@
+.git
+.devdata
+testdata
+docs
+web/node_modules
+web/dist
+deploy
+scripts
+*.md
+dockerconfig.json

@@ -1,0 +1,27 @@
+# mikrotik-home-netflow-plus as a Simple Docker Ops application.
+# Full walkthrough: SETUP-SIMPLEDOCKEROPS.md
+#
+# Paste this file into Applications -> New. The ${...} names become the
+# application's variables; ROUTER_PASSWORD must be marked as a secret.
+# The image is public, so no registry credentials are needed.
+#
+# Host networking: flow records arrive on UDP 2055 with the router's real
+# source address, and the web interface is served on HTTP_PORT.
+services:
+  netflow:
+    image: kcdyer/mikrotik-home-netflow-plus:1.1.0
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      NFP_EXPORTERS: ${ROUTER_IP}
+      NFP_ROUTER_ADDR: ${ROUTER_IP}
+      NFP_ROUTER_USER: ${ROUTER_USER}
+      NFP_ROUTER_PASSWORD: ${ROUTER_PASSWORD}
+      NFP_ROUTER_TLS: "true"
+      NFP_SITES: ${SITES}
+      NFP_HTTP_LISTEN: ":${HTTP_PORT}"
+    volumes:
+      - netflow-data:/data
+
+volumes:
+  netflow-data:

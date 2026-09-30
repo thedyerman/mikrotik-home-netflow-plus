@@ -1,0 +1,29 @@
+# Local development state: database with real traffic, binaries, logs
+.devdata/
+
+# Web build output is generated (npm run build). The placeholder keeps the
+# directory present so the Go embed compiles on a fresh clone.
+web/node_modules/
+web/dist/*
+!web/dist/.gitkeep
+
+# Secrets and machine-specific files
+deploy/.env
+.env
+dockerconfig.json
+*.pin
+
+# Private material: original captures and notes about a specific network
+testdata/private/
+netflow-mikrotik-plan.md
+
+# AI-assistant working files, editor and OS clutter
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+.mcp.json
+.cursor/
+.aider*
+.vscode/
+.idea/
+.DS_Store
