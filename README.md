@@ -4,6 +4,12 @@ Live network traffic for a MikroTik router, grouped per connection and per devic
 
 One Go binary, one container, one SQLite file. No cloud service, no agents on your devices.
 
+**Ready-made Docker image:** [`kcdyer/mikrotik-home-netflow-plus`](https://hub.docker.com/r/kcdyer/mikrotik-home-netflow-plus) on Docker Hub, public, built for amd64 and arm64. Nothing to compile.
+
+```sh
+docker pull kcdyer/mikrotik-home-netflow-plus:latest
+```
+
 - See what is using the connection **right now**, second by second.
 - See which **device** talked to which **destination** over the last hour, day, week or month.
 - Put a **wall display** on a small screen that shows the network at a glance.
@@ -90,7 +96,7 @@ The design, and the RouterOS behaviour it was built around, are described in [do
 | What | Details |
 |---|---|
 | Router | MikroTik with **RouterOS 7**. Developed against 7.20 on an L009; any device that supports Traffic Flow should work |
-| Host | Any Linux machine with Docker and Compose v2, on the same network as the router. Images are published for amd64 and arm64 |
+| Host | Any Linux machine with Docker and Compose v2, on the same network as the router. The public image on Docker Hub covers amd64 and arm64, so a Raspberry Pi 4 or 5 works as well as an x86 server |
 | Resources | Well under 200 MB RAM and negligible CPU for a home network; 2 GB of disk by default |
 | Ports | UDP 2055 (flow records in), TCP 8080 (web interface). Both configurable |
 
@@ -286,7 +292,7 @@ This tool records what every device on your network connects to. Treat the data 
 
 ## Building and publishing
 
-You only need this to run a modified version; the published image covers normal use.
+You only need this to run a modified version. The published image, [`kcdyer/mikrotik-home-netflow-plus`](https://hub.docker.com/r/kcdyer/mikrotik-home-netflow-plus), covers normal use; `latest` follows the newest release and each release is also tagged with its version number.
 
 The Dockerfile builds the web interface, downloads the organisation database and compiles a static binary into a distroless image that runs as a non-root user.
 
