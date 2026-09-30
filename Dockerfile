@@ -24,7 +24,7 @@ RUN set -eu; \
 
 # ---- server ----
 FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
-ARG TARGETOS TARGETARCH
+ARG TARGETOS TARGETARCH TARGETVARIANT
 ARG VERSION=dev
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -33,7 +33,8 @@ COPY cmd ./cmd
 COPY internal ./internal
 COPY web/embed.go ./web/embed.go
 COPY --from=web /src/web/dist ./web/dist
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+# TARGETVARIANT is "v7" for 32-bit ARM; Go wants it as GOARM=7.
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
     go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
     -o /out/mikrotik-home-netflow-plus ./cmd/mikrotik-home-netflow-plus
 # An empty /data owned by the runtime user, so a fresh named volume is writable.
