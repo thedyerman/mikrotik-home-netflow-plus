@@ -4,7 +4,7 @@ Live network traffic for a MikroTik router, grouped per connection and per devic
 
 One Go binary, one container, one SQLite file. No cloud service, no agents on your devices.
 
-**Ready-made Docker image:** [`kcdyer/mikrotik-home-netflow-plus`](https://hub.docker.com/r/kcdyer/mikrotik-home-netflow-plus) on Docker Hub, public, built for amd64 and arm64. Nothing to compile.
+**Ready-made Docker image:** [`kcdyer/mikrotik-home-netflow-plus`](https://hub.docker.com/r/kcdyer/mikrotik-home-netflow-plus) on Docker Hub, public, built for amd64, arm64 and 32-bit ARM (ARMv7). Nothing to compile.
 
 ```sh
 docker pull kcdyer/mikrotik-home-netflow-plus:latest
@@ -96,7 +96,7 @@ The design, and the RouterOS behaviour it was built around, are described in [do
 | What | Details |
 |---|---|
 | Router | MikroTik with **RouterOS 7**. Developed against 7.20 on an L009; any device that supports Traffic Flow should work |
-| Host | Any Linux machine with Docker and Compose v2, on the same network as the router. The public image on Docker Hub covers amd64 and arm64, so a Raspberry Pi 4 or 5 works as well as an x86 server |
+| Host | Any Linux machine with Docker and Compose v2, on the same network as the router. The public image on Docker Hub covers amd64, arm64 and ARMv7, so a Raspberry Pi works as well as an x86 server |
 | Resources | Well under 200 MB RAM and negligible CPU for a home network; 2 GB of disk by default |
 | Ports | UDP 2055 (flow records in), TCP 8080 (web interface). Both configurable |
 
@@ -117,7 +117,7 @@ chmod 600 deploy/.env
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-This pulls the published image, [`kcdyer/mikrotik-home-netflow-plus`](https://hub.docker.com/r/kcdyer/mikrotik-home-netflow-plus) on Docker Hub, which is built for amd64 and arm64. Nothing needs compiling.
+This pulls the published image, [`kcdyer/mikrotik-home-netflow-plus`](https://hub.docker.com/r/kcdyer/mikrotik-home-netflow-plus) on Docker Hub, which is built for amd64, arm64 and ARMv7. Nothing needs compiling.
 
 Then configure the router so it sends flow records to this host: see [SETUP-MIKROTIK-ROUTER.md](SETUP-MIKROTIK-ROUTER.md). The short version, from a RouterOS terminal:
 
@@ -301,11 +301,11 @@ The Dockerfile builds the web interface, downloads the organisation database and
 docker build --build-arg VERSION=1.1.0 -t mikrotik-home-netflow-plus:dev .
 
 # a multi-architecture image, pushed to a registry
-docker buildx build --platform linux/amd64,linux/arm64 --build-arg VERSION=1.1.0 \
+docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 --build-arg VERSION=1.1.0 \
   -t <registry>/<namespace>/mikrotik-home-netflow-plus:1.1.0 --push .
 ```
 
-Then put that image name in the compose file.
+Then put that image name in the compose file. The build stages cross-compile, so building for all three architectures needs no emulation.
 
 The image is about 12 MB to download (40 MB unpacked). It has a built-in health check (`/mikrotik-home-netflow-plus healthcheck`), so orchestrators can tell when it is ready.
 
