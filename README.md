@@ -384,11 +384,11 @@ The Dockerfile builds the web interface, downloads the organisation database and
 
 ```sh
 # a local image for this machine
-docker build --build-arg VERSION=1.2.1 -t mikrotik-home-netflow-plus:dev .
+docker build --build-arg VERSION=1.2.2 -t mikrotik-home-netflow-plus:dev .
 
 # a multi-architecture image, pushed to a registry
-docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 --build-arg VERSION=1.2.1 \
-  -t <registry>/<namespace>/mikrotik-home-netflow-plus:1.2.1 --push .
+docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 --build-arg VERSION=1.2.2 \
+  -t <registry>/<namespace>/mikrotik-home-netflow-plus:1.2.2 --push .
 ```
 
 Then put that image name in the compose file. The build stages cross-compile, so building for all three architectures needs no emulation.

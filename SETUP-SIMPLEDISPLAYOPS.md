@@ -110,6 +110,7 @@ Do not put the password in the URL.
 | Blank page or "cannot be reached" | The Pi cannot reach the collector. Check that the address and port are right and that the Pi's network (for example a guest Wi-Fi) is allowed to reach the collector's |
 | Red "Collector unreachable" banner | Same cause, but it worked before: the collector is down or restarting. The page recovers by itself |
 | "Today" shows dashes | The collector is older than 1.1.0. Upgrade it |
+| The two big figures stay at 0.0 while the lists and clock move | The collector is older than 1.2.2. Kiosk players that render off-screen never deliver animation frames, which earlier versions used to move the figures. Upgrade it |
 | The page is the full web interface, not the wall display | The URL is missing `/dashboard` |
 | Text is too small to read from where you sit | Add `?rotate=true` |
 | A password prompt appears on the screen | The collector has a web password. See [above](#if-the-web-interface-has-a-password) |

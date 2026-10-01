@@ -120,27 +120,45 @@ export function useNow(intervalMs = 1000): number {
 // useTween glides a displayed number toward its target over the whole update
 // interval, at constant speed, so a once-a-second value moves continuously
 // instead of jumping and stopping. It honours the reduced-motion preference.
+//
+// The glide is driven by a timer, not by requestAnimationFrame: some kiosk
+// players render pages off-screen and never deliver frame callbacks, which
+// left the figures stuck at their first value. When the page is not visible
+// the value snaps to its target instead, since nobody is watching the glide
+// and background timers are throttled.
 export function useTween(target: number, ms = 1000): number {
   const [value, setValue] = useState(target);
-  const from = useRef(target);
   const current = useRef(target);
   useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    const snap = () => {
       current.current = target;
       setValue(target);
+    };
+    if (ms <= 0 || document.visibilityState !== "visible" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      snap();
       return;
     }
-    from.current = current.current;
+    const from = current.current;
     const start = performance.now();
-    let raf = 0;
-    const step = (t: number) => {
-      const k = Math.min(1, (t - start) / ms);
-      current.current = from.current + (target - from.current) * k;
+    let timer = 0;
+    const step = () => {
+      const k = Math.min(1, (performance.now() - start) / ms);
+      current.current = from + (target - from) * k;
       setValue(current.current);
-      if (k < 1) raf = requestAnimationFrame(step);
+      if (k < 1) timer = window.setTimeout(step, 33);
     };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
+    timer = window.setTimeout(step, 33);
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") {
+        window.clearTimeout(timer);
+        snap();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [target, ms]);
   return value;
 }

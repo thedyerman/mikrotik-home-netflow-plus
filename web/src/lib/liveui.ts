@@ -210,9 +210,23 @@ export function useLiveRanking<T extends RateLike>(items: T[], opts: LiveRanking
 
 // ---- reorder animation ----
 
+/** Runs fn on the next frame, or after a short timeout where frame callbacks never arrive (off-screen kiosk players). */
+function nextFrame(fn: () => void) {
+  let done = false;
+  const run = () => {
+    if (done) return;
+    done = true;
+    fn();
+  };
+  requestAnimationFrame(run);
+  window.setTimeout(run, 50);
+}
+
 /**
  * Animates rows that change position: every element with a data-flip
  * attribute inside the container slides from where it was to where it is.
+ * The animation is skipped when the page is not visible, so a row is never
+ * left displaced if the end of the slide cannot be scheduled.
  */
 export function useFlip(ref: RefObject<HTMLElement | null>, deps: unknown) {
   const prev = useRef(new Map<string, number>());
@@ -230,13 +244,13 @@ export function useFlip(ref: RefObject<HTMLElement | null>, deps: unknown) {
       if (old !== undefined && Math.abs(old - top) > 0.5) moves.push([c, old - top]);
     });
     prev.current = next;
-    if (moves.length === 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (moves.length === 0 || document.visibilityState !== "visible" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     for (const [c, dy] of moves) {
       c.style.transition = "none";
       c.style.transform = `translateY(${dy}px)`;
     }
     void el.offsetHeight; // commit the start position before animating to the end
-    requestAnimationFrame(() => {
+    nextFrame(() => {
       for (const [c] of moves) {
         c.style.transition = "transform 320ms ease";
         c.style.transform = "";
