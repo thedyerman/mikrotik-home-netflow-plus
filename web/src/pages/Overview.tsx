@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { query, type Overview as OverviewData } from "../lib/api";
 import { bytes, count, fmtBytes, fmtRate, pct, rate } from "../lib/format";
 import { navigate, useFetch, useTween } from "../lib/hooks";
+import { useStableRate } from "../lib/liveui";
 import { useLive } from "../lib/live";
 import { useView } from "../lib/view";
 import { Card, ErrorNote, Legend, PageHead, RangeControl, ZoneControl } from "../components/Controls";
@@ -21,9 +22,11 @@ function Kpi({ label, value, unit, sub, hero = false }: { label: string; value: 
   );
 }
 
+// The number glides across each one-second tick and holds its unit until the
+// value is clearly past the boundary; the server has already smoothed the rate.
 function LiveRate({ bps }: { bps: number }) {
-  const r = fmtRate(useTween(bps));
-  return <>{r.value}<span className="kpi-unit">{r.unit}</span></>;
+  const r = useStableRate(useTween(bps));
+  return <><span className="kpi-num">{r.value}</span><span className="kpi-unit">{r.unit}</span></>;
 }
 
 export function Overview() {
@@ -100,15 +103,15 @@ export function Overview() {
 
       <div className={"grid-3" + (ov.stale ? " stale" : "")}>
         <Card title="Top devices" note={rankNote}>
-          <RankList unit={isLive ? "rate" : "bytes"} items={toRank(isLive ? tick?.topDevices : data?.topDevices)}
+          <RankList unit={isLive ? "rate" : "bytes"} items={toRank(isLive ? tick?.topDevices : data?.topDevices)} limit={isLive ? 8 : undefined}
             onSelect={(it) => it.id && navigate(`/devices/${it.id}`)} empty={isLive ? "No traffic right now" : "No traffic in this period"} />
         </Card>
         <Card title="Top destinations" note={rankNote}>
-          <RankList unit={isLive ? "rate" : "bytes"} items={toRank(isLive ? tick?.topDests : data?.topDests)}
+          <RankList unit={isLive ? "rate" : "bytes"} items={toRank(isLive ? tick?.topDests : data?.topDests)} limit={isLive ? 8 : undefined}
             onSelect={(it) => openFlows("dest", it)} empty={isLive ? "No traffic right now" : "No traffic in this period"} />
         </Card>
         <Card title="Top services" note={rankNote}>
-          <RankList unit={isLive ? "rate" : "bytes"} items={toRank(isLive ? tick?.topServices : data?.topServices)}
+          <RankList unit={isLive ? "rate" : "bytes"} items={toRank(isLive ? tick?.topServices : data?.topServices)} limit={isLive ? 8 : undefined}
             onSelect={(it) => openFlows("service", it)} empty={isLive ? "No traffic right now" : "No traffic in this period"} />
         </Card>
       </div>

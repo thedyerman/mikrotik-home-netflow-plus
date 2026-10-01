@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { UnitHold, stableOrder, useFlip } from "../lib/liveui";
 import { query, type FlowRow, type LiveRow } from "../lib/api";
 import { bytes, clockShort, dayTime, duration, endpoint, rate } from "../lib/format";
 import { href, navigate, useFetch, useRoute } from "../lib/hooks";
@@ -37,14 +38,22 @@ function ZoneTag({ zone, site }: { zone: string; site?: string }) {
 }
 
 /** A rate with a thin bar behind it, scaled to the largest rate on screen. */
-function RateCell({ value, max, kind }: { value: number; max: number; kind: "down" | "up" }) {
+function RateCell({ value, max, kind, units, id }: { value: number; max: number; kind: "down" | "up"; units?: UnitHold; id?: string }) {
+  const text = () => {
+    if (value <= 0) return <span className="dim">—</span>;
+    if (!units || !id) return rate(value);
+    const r = units.format(id, value);
+    return `${r.value} ${r.unit}`;
+  };
   return (
     <span className="rate-cell">
-      <span className={"mini-bar " + kind} style={{ width: (max > 0 ? Math.max(value > 0 ? 2 : 0, (value / max) * 100) : 0) + "%" }} />
-      <span className="rate-text">{value > 0 ? rate(value) : <span className="dim">—</span>}</span>
+      <span className={"mini-bar " + kind} style={{ width: (max > 0 ? Math.max(value > 0 ? 2 : 0, Math.min(100, (value / max) * 100)) : 0) + "%" }} />
+      <span className="rate-text">{text()}</span>
     </span>
   );
 }
+
+const rowKey = (r: LiveRow) => `${r.proto}|${r.localIp}:${r.localPort}|${r.remoteIp}:${r.remotePort}`;
 
 function matches(r: LiveRow, q: string): boolean {
   if (!q) return true;
@@ -67,11 +76,24 @@ function LiveFlows({ device, compact = false }: { device?: number; compact?: boo
   if (res.data) held.current = res.data;
   const data = held.current;
 
+  // Order is sticky: a row overtakes its neighbour only when clearly ahead,
+  // so the table stops shuffling on every poll. Sorting by transferred bytes
+  // is monotonic and needs no such help.
+  const order = useRef<string[]>([]);
+  const groupOrder = useRef<string[]>([]);
+  const units = useRef(new UnitHold()).current;
+  const scale = useRef({ down: 0, up: 0, at: 0 });
   const rows = useMemo(() => {
     const value = (r: { down: number; up: number; bytesDown: number; bytesUp: number }) =>
       sort === "down" ? r.down : sort === "up" ? r.up : sort === "total" ? r.bytesDown + r.bytesUp : r.down + r.up;
     const filtered = (data?.rows ?? []).filter((r) => (device === undefined || r.dev === device) && (showLocal || r.zone !== "local") && matches(r, q));
-    filtered.sort((a, b) => value(b) - value(a));
+    if (sort === "total") {
+      filtered.sort((a, b) => value(b) - value(a));
+    } else {
+      const byKey = new Map(filtered.map((r) => [rowKey(r), r]));
+      order.current = stableOrder(order.current, new Map(filtered.map((r) => [rowKey(r), value(r)])));
+      filtered.splice(0, filtered.length, ...order.current.map((k) => byKey.get(k)!));
+    }
     return { list: filtered, value };
   }, [data, q, sort, device, showLocal]);
   const hiddenLocal = showLocal ? 0 : (data?.rows ?? []).filter((r) => r.zone === "local" && (device === undefined || r.dev === device)).length;
@@ -90,26 +112,40 @@ function LiveFlows({ device, compact = false }: { device?: number; compact?: boo
       g.rows.push(r);
       g.down += r.down; g.up += r.up; g.bytesDown += r.bytesDown; g.bytesUp += r.bytesUp;
     }
-    return [...m.values()].sort((a, b) => rows.value(b) - rows.value(a));
-  }, [rows, group]);
+    const list = [...m.values()];
+    if (sort === "total") return list.sort((a, b) => rows.value(b) - rows.value(a));
+    const byKey = new Map(list.map((g) => [g.key, g]));
+    groupOrder.current = stableOrder(groupOrder.current, new Map(list.map((g) => [g.key, rows.value(g)])));
+    return groupOrder.current.map((k) => byKey.get(k)!);
+  }, [rows, group, sort]);
 
-  const maxDown = Math.max(0, ...(group === "conn" ? rows.list : groups).map((r) => r.down));
-  const maxUp = Math.max(0, ...(group === "conn" ? rows.list : groups).map((r) => r.up));
+  // Bar scale holds its peak and decays over ~10 s instead of rescaling every poll.
+  const nowSec = performance.now() / 1000;
+  const decay = Math.exp(-(nowSec - scale.current.at) / 10);
+  const curDown = Math.max(0, ...(group === "conn" ? rows.list : groups).map((r) => r.down));
+  const curUp = Math.max(0, ...(group === "conn" ? rows.list : groups).map((r) => r.up));
+  if (curDown >= scale.current.down * decay || curUp >= scale.current.up * decay) {
+    scale.current = { down: Math.max(curDown, scale.current.down * decay), up: Math.max(curUp, scale.current.up * decay), at: nowSec };
+  }
+  const maxDown = Math.max(curDown, scale.current.down * decay);
+  const maxUp = Math.max(curUp, scale.current.up * decay);
+  const tbodyRef = useRef<HTMLTableSectionElement>(null);
+  useFlip(tbodyRef, rows.list);
   const th = (key: SortKey, label: string) => (
     <th className="num">
       <button type="button" className={"th-sort" + (sort === key ? " on" : "")} onClick={() => setSort(key)} aria-pressed={sort === key}>{label}</button>
     </th>
   );
-  const connRow = (r: LiveRow, i: number, nested = false) => (
-    <tr key={`${r.localIp}:${r.localPort}-${r.remoteIp}:${r.remotePort}-${r.proto}-${i}`} className={nested ? "nested" : undefined}>
+  const connRow = (r: LiveRow, nested = false) => (
+    <tr key={rowKey(r) + (nested ? "-n" : "")} data-flip={nested ? undefined : rowKey(r)} className={nested ? "nested" : undefined}>
       <td>
         {r.dev ? <a className="link" href={href(`/devices/${r.dev}`)}>{r.devName}</a> : r.devName}
         <span className="mono dim block">{endpoint(r.localIp, r.localPort)}</span>
       </td>
       <td><Remote name={r.remote} label={r.destLabel} kind={r.destKind} ip={r.remoteIp} port={r.remotePort} /></td>
       <td><ServiceCell service={r.service} tunnel={r.tunnel} proto={r.proto} /> <ZoneTag zone={r.zone} site={r.site} /></td>
-      <td className="num"><RateCell value={r.down} max={maxDown} kind="down" /></td>
-      <td className="num"><RateCell value={r.up} max={maxUp} kind="up" /></td>
+      <td className="num"><RateCell value={r.down} max={maxDown} kind="down" units={units} id={rowKey(r) + "d"} /></td>
+      <td className="num"><RateCell value={r.up} max={maxUp} kind="up" units={units} id={rowKey(r) + "u"} /></td>
       <td className="num">{bytes(r.bytesDown + r.bytesUp)}</td>
     </tr>
   );
@@ -146,24 +182,24 @@ function LiveFlows({ device, compact = false }: { device?: number; compact?: boo
                 {th("total", "Transferred")}
               </tr>
             </thead>
-            <tbody>
-              {group === "conn" && shown.map((r, i) => connRow(r, i))}
+            <tbody ref={tbodyRef}>
+              {group === "conn" && shown.map((r) => connRow(r))}
               {group !== "conn" && groups.map((g) => {
                 const isOpen = open.has(g.key);
                 return (
                   <Fragment key={g.key}>
-                    <tr className="group-row" onClick={() => { const n = new Set(open); isOpen ? n.delete(g.key) : n.add(g.key); setOpen(n); }}>
+                    <tr className="group-row" data-flip={"g:" + g.key} onClick={() => { const n = new Set(open); isOpen ? n.delete(g.key) : n.add(g.key); setOpen(n); }}>
                       <td>
                         <button type="button" className={"caret" + (isOpen ? " open" : "")} aria-expanded={isOpen} aria-label={isOpen ? "Collapse" : "Expand"}><IconChevron /></button>
                         <span className="primary">{g.label}</span>
                       </td>
                       <td>{g.rows.length}</td>
                       <td className="dim">{g.sub}</td>
-                      <td className="num"><RateCell value={g.down} max={maxDown} kind="down" /></td>
-                      <td className="num"><RateCell value={g.up} max={maxUp} kind="up" /></td>
+                      <td className="num"><RateCell value={g.down} max={maxDown} kind="down" units={units} id={"g:" + g.key + "d"} /></td>
+                      <td className="num"><RateCell value={g.up} max={maxUp} kind="up" units={units} id={"g:" + g.key + "u"} /></td>
                       <td className="num">{bytes(g.bytesDown + g.bytesUp)}</td>
                     </tr>
-                    {isOpen && g.rows.slice(0, 50).map((r, i) => connRow(r, i, true))}
+                    {isOpen && g.rows.slice(0, 50).map((r) => connRow(r, true))}
                   </Fragment>
                 );
               })}

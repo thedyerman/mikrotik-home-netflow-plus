@@ -117,9 +117,10 @@ export function useNow(intervalMs = 1000): number {
   return now;
 }
 
-// useTween eases a displayed number toward its target so live figures glide
-// instead of jumping. It honours the reduced-motion preference.
-export function useTween(target: number, ms = 600): number {
+// useTween glides a displayed number toward its target over the whole update
+// interval, at constant speed, so a once-a-second value moves continuously
+// instead of jumping and stopping. It honours the reduced-motion preference.
+export function useTween(target: number, ms = 1000): number {
   const [value, setValue] = useState(target);
   const from = useRef(target);
   const current = useRef(target);
@@ -134,8 +135,7 @@ export function useTween(target: number, ms = 600): number {
     let raf = 0;
     const step = (t: number) => {
       const k = Math.min(1, (t - start) / ms);
-      const eased = 1 - Math.pow(1 - k, 3);
-      current.current = from.current + (target - from.current) * eased;
+      current.current = from.current + (target - from.current) * k;
       setValue(current.current);
       if (k < 1) raf = requestAnimationFrame(step);
     };

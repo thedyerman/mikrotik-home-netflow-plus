@@ -51,6 +51,7 @@
 .dash-hero.second { font-size: 5.2em; }
 .dash-big { font-size: 4.2em; font-weight: 600; letter-spacing: -0.03em; line-height: 1; white-space: nowrap; margin-top: 0.16em; }
 .dash-unit { font-size: 0.36em; font-weight: 500; color: var(--text-2); margin-left: 0.35em; letter-spacing: 0; }
+.dash-num { display: inline-block; min-width: 2.2em; }
 .dash-big .dash-unit { font-size: 0.42em; }
 
 .dash-today dl { margin: 0.35em 0 0; display: grid; gap: 0.15em; }
@@ -75,8 +76,8 @@
 .dash-rank li { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.7fr) auto; align-items: center; gap: 0.9em; }
 .dash-rank-name { font-size: 1.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dash-rank-track { height: 0.6em; display: block; }
-.dash-rank-bar { display: flex; gap: 2px; height: 100%; min-width: 3px; }
-.dash-rank-bar span { flex: 1 1 0; min-width: 2px; }
+.dash-rank-bar { display: flex; gap: 2px; height: 100%; min-width: 3px; transition: width 1.2s ease-out; }
+.dash-rank-bar span { flex: 1 1 0; min-width: 2px; transition: flex-basis 1.2s ease-out; }
 .dash-rank-bar span.down { background: var(--down); }
 .dash-rank-bar span.up { background: var(--up); }
 .dash-rank-bar span:last-child { border-radius: 0 0.3em 0.3em 0; }

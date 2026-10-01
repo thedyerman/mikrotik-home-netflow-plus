@@ -155,11 +155,22 @@ Neither hosted service is required. Plain Docker Compose runs the collector, and
 
 A zone selector scopes the historical views: *External* (internet and remote sites, the default), *Internet*, *Sites*, *Local*, or *All*.
 
+### How the live numbers move
+
+Per-second network rates are genuinely jumpy, so the live views are smoothed for reading while the chart stays honest:
+
+- **Rates are smoothed on the server** with a fast attack and a slow release (about 2 s to follow a rise, 6 s to follow a fall), the way a VU meter moves. A new transfer shows up within a couple of seconds; the one-second burstiness of TCP is averaged away. The throughput chart still plots the raw one-second samples.
+- **Rankings are sticky.** A row only overtakes the one above it when it is clearly ahead (by 20% and at least 20 kb/s), so near-ties stop flickering while a real change still moves rows at once. Reorders slide into place.
+- **Scales and units hold.** Bars are scaled to a peak that decays over about ten seconds instead of rescaling whenever the leader changes, and a value keeps its unit until it is well past the boundary (it switches to Mb/s above 1.2 Mb/s and back below 0.8), so numbers do not flip between `990 kb/s` and `1.0 Mb/s`.
+- **Figures glide** across each one-second tick and keep a fixed width, so the layout never shifts.
+
+Connections that stop fade out of the live table over a few seconds instead of vanishing.
+
 ## Wall display
 
 `/dashboard` is a single full-screen page for an always-on display. It is always dark, has no controls and hides the pointer.
 
-It shows download and upload right now, a live throughput chart, top devices, top destinations, today's totals, and a status strip that turns into a banner when an alert fires, the router stops sending flow records, or the collector cannot be reached.
+It shows download and upload right now, a live throughput chart, top devices, top destinations, today's totals, and a status strip that turns into a banner when an alert fires, the router stops sending flow records, or the collector cannot be reached. Its figures move more slowly than the main interface's, since it is read from across a room.
 
 | URL | Result |
 |---|---|
@@ -373,11 +384,11 @@ The Dockerfile builds the web interface, downloads the organisation database and
 
 ```sh
 # a local image for this machine
-docker build --build-arg VERSION=1.1.1 -t mikrotik-home-netflow-plus:dev .
+docker build --build-arg VERSION=1.2.0 -t mikrotik-home-netflow-plus:dev .
 
 # a multi-architecture image, pushed to a registry
-docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 --build-arg VERSION=1.1.1 \
-  -t <registry>/<namespace>/mikrotik-home-netflow-plus:1.1.1 --push .
+docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 --build-arg VERSION=1.2.0 \
+  -t <registry>/<namespace>/mikrotik-home-netflow-plus:1.2.0 --push .
 ```
 
 Then put that image name in the compose file. The build stages cross-compile, so building for all three architectures needs no emulation.

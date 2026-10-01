@@ -3,6 +3,7 @@ import "../dashboard.css";
 import type { RateItem, Tick, Today } from "../lib/api";
 import { count, fmtBytes, fmtRate, pct } from "../lib/format";
 import { useElementSize, useFetch, useNow, useTween } from "../lib/hooks";
+import { UnitHold, useFlip, useLiveRanking, useSmooth, useStableRate } from "../lib/liveui";
 import { LiveProvider, useLive } from "../lib/live";
 import { ViewProvider } from "../lib/view";
 import { IconCheck, IconCritical, IconWarn } from "../components/Icons";
@@ -81,9 +82,13 @@ function Stage({ options }: { options: Options }) {
   );
 }
 
+// A wall display is glanced at from across the room, so its figures move more
+// slowly than the main interface: extra smoothing on top of the server's, a
+// one-second glide, a unit that does not flip at the boundary, and a reserved
+// width so the layout never shifts.
 function Rate({ bps, className }: { bps: number; className: string }) {
-  const r = fmtRate(useTween(bps, 450));
-  return <div className={className}>{r.value}<span className="dash-unit">{r.unit}</span></div>;
+  const r = useStableRate(useTween(useSmooth(bps, 2, 5)));
+  return <div className={className}><span className="dash-num">{r.value}</span><span className="dash-unit">{r.unit}</span></div>;
 }
 
 function Board({ options, unit, wide }: { options: Options; unit: number; wide: boolean }) {
@@ -182,8 +187,12 @@ function RankPanel({ title, note, items, unit, dots }: { title: string; note?: s
   const minRow = unit * (dots ? 3.3 : 2.9); // the rotating panel uses larger type
   const rows = Math.max(1, Math.floor((size.height + 1) / minRow));
   const rowHeight = size.height / rows; // share out any leftover space
-  const shown = items.slice(0, rows);
-  const max = Math.max(1, ...shown.map((i) => i.down + i.up));
+  const ranked = useLiveRanking(items, { attack: 2, release: 5, hold: 15 });
+  const shown = ranked.items.slice(0, rows);
+  const max = ranked.max;
+  const units = useRef(new UnitHold()).current;
+  units.forget(new Set(shown.map((it) => `${it.id}:${it.label}`)));
+  useFlip(ref, shown);
   return (
     <>
       <div className="dash-panel-head">
@@ -194,14 +203,15 @@ function RankPanel({ title, note, items, unit, dots }: { title: string; note?: s
       <ol className="dash-rank" ref={ref}>
         {size.height > 0 && shown.map((it) => {
           const total = it.down + it.up;
-          const r = fmtRate(total);
+          const key = `${it.id}:${it.label}`;
+          const r = units.format(key, total);
           return (
-            <li key={it.id + it.label} style={{ height: rowHeight }}>
+            <li key={key} data-flip={key} style={{ height: rowHeight }}>
               <span className="dash-rank-name">{it.label || "unknown"}</span>
               <span className="dash-rank-track">
-                <span className="dash-rank-bar" style={{ width: Math.max(2, (total / max) * 100) + "%" }}>
-                  {it.down > 0 && <span className="down" style={{ flexBasis: (it.down / total) * 100 + "%" }} />}
-                  {it.up > 0 && <span className="up" style={{ flexBasis: (it.up / total) * 100 + "%" }} />}
+                <span className="dash-rank-bar" style={{ width: Math.max(2, Math.min(100, (total / max) * 100)) + "%" }}>
+                  <span className="down" style={{ flexBasis: (it.down / total) * 100 + "%", display: it.down > 0 ? undefined : "none" }} />
+                  <span className="up" style={{ flexBasis: (it.up / total) * 100 + "%", display: it.up > 0 ? undefined : "none" }} />
                 </span>
               </span>
               <span className="dash-rank-val">{r.value}<span className="dash-unit">{r.unit}</span></span>

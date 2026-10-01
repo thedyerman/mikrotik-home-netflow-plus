@@ -215,6 +215,7 @@ tr:hover .icon-btn.subtle, .page-title .icon-btn.subtle, .icon-btn.subtle:focus-
 .kpi-value { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.25; white-space: nowrap; }
 .kpi.hero .kpi-value { font-size: 50px; letter-spacing: -0.035em; line-height: 1.1; }
 .kpi-unit { font-size: 0.5em; font-weight: 500; color: var(--text-2); margin-left: 5px; letter-spacing: 0; }
+.kpi-num { display: inline-block; min-width: 2.3em; } /* "84.2" fits; the layout does not shift as digits change */
 .kpi.hero .kpi-unit { font-size: 0.36em; }
 .kpi-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
 
@@ -254,7 +255,9 @@ tr:hover .icon-btn.subtle, .page-title .icon-btn.subtle, .icon-btn.subtle:focus-
 .rank-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rank-track { display: block; height: 8px; min-width: 0; }
 .rank-bar { display: flex; gap: 2px; height: 100%; min-width: 3px; }
+.rank.live .rank-bar { transition: width 0.9s ease-out; }
 .rank-seg { flex: 1 1 0; min-width: 2px; }
+.rank.live .rank-seg { transition: flex-basis 0.9s ease-out; }
 .rank-seg:last-child { border-radius: 0 4px 4px 0; }
 .rank-val { font-variant-numeric: tabular-nums; color: var(--text-2); font-size: 12.5px; min-width: 66px; text-align: right; white-space: nowrap; }
 
@@ -289,7 +292,8 @@ tr.nested td:first-child { padding-left: 40px; }
 .two-line .primary { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .svc { white-space: nowrap; }
 .rate-cell { position: relative; display: inline-block; min-width: 96px; text-align: right; padding-bottom: 5px; }
-.mini-bar { position: absolute; right: 0; bottom: 0; height: 3px; border-radius: 2px 0 0 2px; max-width: 100%; transition: width 0.4s ease-out; }
+.mini-bar { position: absolute; right: 0; bottom: 0; height: 3px; border-radius: 2px 0 0 2px; max-width: 100%; transition: width 1.2s ease-out; }
+.rate-text { display: inline-block; min-width: 6.2em; font-variant-numeric: tabular-nums; }
 .vol { display: inline-flex; flex-direction: column; align-items: stretch; gap: 4px; width: 150px; }
 .vol .rank-track { height: 5px; }
 .vol .rank-bar { margin-left: auto; }

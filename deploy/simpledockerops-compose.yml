@@ -12,7 +12,7 @@
 # default; use 60s on a device that runs from an SD card (less card wear).
 services:
   netflow:
-    image: kcdyer/mikrotik-home-netflow-plus:1.1.1
+    image: kcdyer/mikrotik-home-netflow-plus:1.2.0
     restart: unless-stopped
     network_mode: host
     environment:

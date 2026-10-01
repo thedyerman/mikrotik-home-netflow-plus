@@ -206,6 +206,7 @@ Rules that describe a condition fire and resolve; a resolved rule will not fire 
 | Interface counters for the live chart | Exact and current, unlike flow records |
 | Plain tables, server-side row cap | No virtualisation library needed at home-network scale |
 | Flow-only live rates as a 90 s average | A per-record rate made finished bursts look active for a minute |
+| Displayed rates smoothed with fast attack / slow release; rankings sticky; chart raw | One-second rates change by half from second to second on a real link, and rankings of near-equal values flip constantly. Smoothing the figures (2 s rise, 6 s fall) and requiring a clear margin before rows swap keeps the view readable without hiding real changes; the chart keeps the raw samples because a line is read as a whole |
 
 ## Known limits
 

@@ -12,6 +12,7 @@ import (
 	"mikrotik-home-netflow-plus/internal/enrich"
 	"mikrotik-home-netflow-plus/internal/flow"
 	"mikrotik-home-netflow-plus/internal/ipfix"
+	"mikrotik-home-netflow-plus/internal/routeros"
 	"mikrotik-home-netflow-plus/internal/store"
 )
 
@@ -170,5 +171,58 @@ func TestSpreadAcrossMinutes(t *testing.T) {
 	})
 	if n != 1 {
 		t.Errorf("zero-length interval produced %d buckets", n)
+	}
+}
+
+// Displayed rates rise quickly, fall slowly, and a connection that leaves the
+// router's active list fades out instead of vanishing.
+func TestLiveRateSmoothing(t *testing.T) {
+	eng, _, _ := replayCapture(t)
+	eng.mu.Lock()
+	eng.live.wan = map[string]bool{"ether1": true}
+	eng.live.apiUp = true
+	eng.mu.Unlock()
+
+	// WAN counters: 1 s polls at a steady 80 Mb/s, then silence.
+	t0 := time.Unix(1_800_000_000, 0)
+	poll := func(sec int, rx uint64) {
+		eng.Interfaces(t0.Add(time.Duration(sec)*time.Second), []routeros.Interface{{Index: 2, Name: "ether1", Type: "ether", RxBytes: rx, Running: true}})
+	}
+	poll(0, 0)
+	for s := 1; s <= 10; s++ {
+		poll(s, uint64(s)*10_000_000) // 10 MB/s = 80 Mb/s
+	}
+	eng.mu.Lock()
+	rising := eng.live.wanDownS
+	eng.mu.Unlock()
+	if rising < 0.95*80e6 || rising > 80e6 {
+		t.Errorf("after 10 s at 80 Mb/s the smoothed rate is %.1f Mb/s", rising/1e6)
+	}
+	poll(11, 100_000_000)
+	poll(12, 100_000_000)
+	eng.mu.Lock()
+	falling := eng.live.wanDownS
+	eng.mu.Unlock()
+	if falling < 0.6*80e6 || falling > 0.8*80e6 { // release constant 6 s: about 72% left after 2 s
+		t.Errorf("2 s after traffic stopped the smoothed rate is %.1f Mb/s, want 48..64", falling/1e6)
+	}
+
+	// A connection: one snapshot at 10 Mb/s, then it disappears.
+	conn := routeros.Conn{Proto: 6, Src: netip.MustParseAddr("192.168.88.234"), SrcPort: 50000,
+		Dst: netip.MustParseAddr("198.18.1.55"), DstPort: 443, ReplySrc: netip.MustParseAddr("198.18.1.55"), ReplySrcPort: 443,
+		ReplyDst: netip.MustParseAddr("100.64.1.2"), ReplyDstPort: 50000, OrigRate: 500_000, ReplRate: 10_000_000, SrcNAT: true}
+	eng.Connections(t0, []routeros.Conn{conn}, 1)
+	rows, mode, _ := eng.LiveRows(10)
+	if mode != "api" || len(rows) != 1 || rows[0].Down != 10e6 {
+		t.Fatalf("first sight: mode=%s rows=%d down=%v (want shown at full rate immediately)", mode, len(rows), rows)
+	}
+	eng.Connections(t0.Add(2*time.Second), nil, 0)
+	rows, _, _ = eng.LiveRows(10)
+	if len(rows) != 1 || rows[0].Down > 0.8*10e6 || rows[0].Down < 0.6*10e6 {
+		t.Fatalf("2 s after vanishing the connection should be fading, got %v", rows)
+	}
+	eng.Connections(t0.Add(40*time.Second), nil, 0)
+	if rows, _, _ = eng.LiveRows(10); len(rows) != 0 {
+		t.Fatalf("after 40 s the connection should be gone, got %v", rows)
 	}
 }

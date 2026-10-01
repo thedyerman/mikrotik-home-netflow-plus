@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"math"
 	"net/netip"
 	"sort"
 	"strings"
@@ -34,7 +35,41 @@ type liveState struct {
 	infoAt       time.Time
 	wanDown      float64 // bits per second from the last counter poll
 	wanUp        float64
+	wanDownS     float64 // the same, smoothed for display (see smoothRate)
+	wanUpS       float64
 	wanAt        time.Time
+	rates        map[flow.ConnKey]*liveRate // per-connection smoothed rates
+	activeCount  int                        // connections in the last snapshot
+}
+
+// liveRate is the displayed state of one connection: the last row the router
+// gave us plus rates smoothed across polls.
+type liveRate struct {
+	row  LiveRow
+	down float64
+	up   float64
+	seen time.Time // last snapshot that contained the connection
+}
+
+// Displayed rates follow a rise quickly and a fall slowly, like a VU meter:
+// a new transfer shows up within a couple of seconds, while the one-second
+// burstiness of TCP is averaged away. Charts still get the raw samples.
+const (
+	attackTau  = 2.0 // seconds; time constant when the rate is rising
+	releaseTau = 6.0 // seconds; time constant when it is falling
+	rateFloor  = 2000.0
+)
+
+// smoothRate moves y towards x over dt seconds with the attack or release constant.
+func smoothRate(y, x, dt float64) float64 {
+	if dt <= 0 {
+		return y
+	}
+	tau := releaseTau
+	if x > y {
+		tau = attackTau
+	}
+	return y + (1-math.Exp(-dt/tau))*(x-y)
 }
 
 // ---- routeros.Sink ----
@@ -85,7 +120,14 @@ func (e *Engine) Interfaces(at time.Time, ifs []routeros.Interface) {
 		return
 	}
 	dt := at.Sub(from).Seconds()
-	e.live.wanDown, e.live.wanUp, e.live.wanAt = float64(rx)*8/dt, float64(tx)*8/dt, at
+	down, up := float64(rx)*8/dt, float64(tx)*8/dt
+	if e.live.wanAt.IsZero() || at.Sub(e.live.wanAt) > 30*time.Second {
+		e.live.wanDownS, e.live.wanUpS = down, up // first sample after a gap: no history to smooth from
+	} else {
+		e.live.wanDownS = smoothRate(e.live.wanDownS, down, dt)
+		e.live.wanUpS = smoothRate(e.live.wanUpS, up, dt)
+	}
+	e.live.wanDown, e.live.wanUp, e.live.wanAt = down, up, at
 	// Spread over the real polling interval so a late poll does not look like a spike.
 	r, t := splitter{total: rx}, splitter{total: tx}
 	spread(from, at, 1, func(sec int64, cum float64) {
@@ -104,9 +146,45 @@ func (e *Engine) Interfaces(at time.Time, ifs []routeros.Interface) {
 }
 
 // Connections receives the connections that are moving data right now.
+// Their rates are folded into per-connection smoothed values; a connection
+// that drops out of the snapshot fades out instead of vanishing.
 func (e *Engine) Connections(at time.Time, active []routeros.Conn, total int) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if e.live.rates == nil {
+		e.live.rates = map[flow.ConnKey]*liveRate{}
+	}
+	dt := 0.0
+	if !e.live.connsAt.IsZero() {
+		dt = at.Sub(e.live.connsAt).Seconds()
+	}
+	e.live.activeCount = 0
+	for i := range active {
+		r, key, ok := e.rowFromConntrack(&active[i])
+		if !ok {
+			continue
+		}
+		e.live.activeCount++
+		lr := e.live.rates[key]
+		if lr == nil || dt > 30 {
+			lr = &liveRate{down: r.Down, up: r.Up} // first sight: show it at full rate at once
+			e.live.rates[key] = lr
+		} else {
+			lr.down = smoothRate(lr.down, r.Down, dt)
+			lr.up = smoothRate(lr.up, r.Up, dt)
+		}
+		lr.row, lr.seen = r, at
+	}
+	for key, lr := range e.live.rates {
+		if lr.seen.Equal(at) {
+			continue
+		}
+		lr.down = smoothRate(lr.down, 0, dt)
+		lr.up = smoothRate(lr.up, 0, dt)
+		if lr.down+lr.up < rateFloor || at.Sub(lr.seen) > 30*time.Second {
+			delete(e.live.rates, key)
+		}
+	}
 	e.live.conns, e.live.connsAt, e.live.connTotal = active, at, total
 }
 
@@ -262,11 +340,11 @@ func (e *Engine) liveRowsLocked(now time.Time) ([]LiveRow, string) {
 	mode := e.modeLocked(now)
 	var rows []LiveRow
 	if mode == "api" {
-		rows = make([]LiveRow, 0, len(e.live.conns))
-		for i := range e.live.conns {
-			if r, ok := e.rowFromConntrack(&e.live.conns[i]); ok {
-				rows = append(rows, r)
-			}
+		rows = make([]LiveRow, 0, len(e.live.rates))
+		for _, lr := range e.live.rates {
+			r := lr.row
+			r.Down, r.Up = lr.down, lr.up
+			rows = append(rows, r)
 		}
 	} else {
 		// Without the router API the best available "now" is the average over
@@ -297,11 +375,13 @@ func (e *Engine) liveRowsLocked(now time.Time) ([]LiveRow, string) {
 	return rows, mode
 }
 
-// rowFromConntrack maps a router connection-table entry onto the inside view.
-func (e *Engine) rowFromConntrack(c *routeros.Conn) (LiveRow, bool) {
+// rowFromConntrack maps a router connection-table entry onto the inside view
+// and returns the connection key the row is tracked under.
+func (e *Engine) rowFromConntrack(c *routeros.Conn) (LiveRow, flow.ConnKey, bool) {
 	var r LiveRow
+	var key flow.ConnKey
 	if c.Proto == 17 && c.DstPort == e.opts.FlowPort && e.opts.FlowPort != 0 && e.topo.IsRouter(c.Src) {
-		return r, false // the router's flow export to a collector
+		return r, key, false // the router's flow export to a collector
 	}
 	var local, remote netip.Addr
 	var lport, rport uint16
@@ -315,7 +395,7 @@ func (e *Engine) rowFromConntrack(c *routeros.Conn) (LiveRow, bool) {
 	} else {
 		side := e.topo.Classify(c.Src, c.Dst, false, false)
 		if side.Drop {
-			return r, false
+			return r, key, false
 		}
 		zone, site, router, localIsSrc = side.Zone, side.Site, side.Router, side.LocalIsSrc
 		if localIsSrc {
@@ -340,7 +420,11 @@ func (e *Engine) rowFromConntrack(c *routeros.Conn) (LiveRow, bool) {
 	dest, name := e.destOf(remote, zone, site)
 	r.State, r.Site = c.TCPState, site
 	e.fillRow(&r, dev, local, lport, remote, rport, c.Proto, zone, dest, name)
-	return r, true
+	if c.Proto == 1 || c.Proto == 58 { // ICMP: the same key rule as the flow lane
+		lport, rport = 0, 0
+	}
+	key = flow.ConnKey{Proto: c.Proto, LocalIP: local, LocalPort: lport, RemoteIP: remote, RemotePort: rport}
+	return r, key, true
 }
 
 func (e *Engine) fillRow(r *LiveRow, dev *Device, local netip.Addr, lport uint16, remote netip.Addr, rport uint16, proto uint8, zone flow.Zone, dest *dict, name string) {
@@ -399,14 +483,18 @@ func (e *Engine) Tick() Tick {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	rows, mode := e.liveRowsLocked(now)
-	t := Tick{TS: now.UnixMilli(), Mode: mode, Active: len(rows), Conns: e.live.connTotal, ExportAge: -1,
+	active := len(rows)
+	if mode == "api" {
+		active = e.live.activeCount
+	}
+	t := Tick{TS: now.UnixMilli(), Mode: mode, Active: active, Conns: e.live.connTotal, ExportAge: -1,
 		Firing: firing, Unacked: unacked, AlertTitle: alertTitle, AlertSeverity: alertSeverity, Build: e.opts.BuildID, RouterName: e.router.Name(), APIConfigured: e.opts.APIConfigured, APIError: e.live.apiErr}
 	if !e.lastExport.IsZero() {
 		t.ExportAge = now.Sub(e.lastExport).Seconds()
 	}
 	sec := now.Unix()
 	if mode == "api" && now.Sub(e.live.wanAt) < 5*time.Second {
-		t.Down, t.Up = e.live.wanDown, e.live.wanUp
+		t.Down, t.Up = e.live.wanDownS, e.live.wanUpS // smoothed for the figures; the tail stays raw for the chart
 		t.Tail = e.tailLocked(&e.wanRing, sec-6, sec-1)
 	} else {
 		t.Mode = "flows"
@@ -427,7 +515,9 @@ func (e *Engine) Tick() Tick {
 			t.Devices++
 		}
 	}
-	t.TopDevices, t.TopDests, t.TopServices = rankRows(rows, 8)
+	// More candidates than the interface shows, so that it can keep rows in a
+	// stable order and only promote one when it is clearly ahead.
+	t.TopDevices, t.TopDests, t.TopServices = rankRows(rows, 24)
 	if cov := e.coverageLocked(now); cov.Known {
 		t.Coverage = &cov.Total
 	}
