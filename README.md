@@ -160,7 +160,7 @@ A zone selector scopes the historical views: *External* (internet and remote sit
 Per-second network rates are genuinely jumpy, so the live views are smoothed for reading while the chart stays honest:
 
 - **Rates are smoothed on the server** with a fast attack and a slow release (about 2 s to follow a rise, 6 s to follow a fall), the way a VU meter moves. A new transfer shows up within a couple of seconds; the one-second burstiness of TCP is averaged away. The throughput chart still plots the raw one-second samples.
-- **Rankings are sticky.** A row only overtakes the one above it when it is clearly ahead (by 20% and at least 20 kb/s), so near-ties stop flickering while a real change still moves rows at once. Reorders slide into place.
+- **Rankings are sticky.** Rows are ordered by a slower average than the figure they show (about the last quarter of a minute, the way `iftop` sorts by its 10-second column), and a row only overtakes the one above it after being clearly ahead for a few seconds, by 20% and a margin that grows with the biggest value on the list. Near-ties stop flickering while a real change still moves a row to where it belongs in one step. New rows appear once they have lasted a few seconds, departing rows fade down and out, and reorders slide into place.
 - **Scales and units hold.** Bars are scaled to a peak that decays over about ten seconds instead of rescaling whenever the leader changes, and a value keeps its unit until it is well past the boundary (it switches to Mb/s above 1.2 Mb/s and back below 0.8), so numbers do not flip between `990 kb/s` and `1.0 Mb/s`.
 - **Figures glide** across each one-second tick and keep a fixed width, so the layout never shifts.
 
@@ -384,11 +384,11 @@ The Dockerfile builds the web interface, downloads the organisation database and
 
 ```sh
 # a local image for this machine
-docker build --build-arg VERSION=1.2.0 -t mikrotik-home-netflow-plus:dev .
+docker build --build-arg VERSION=1.2.1 -t mikrotik-home-netflow-plus:dev .
 
 # a multi-architecture image, pushed to a registry
-docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 --build-arg VERSION=1.2.0 \
-  -t <registry>/<namespace>/mikrotik-home-netflow-plus:1.2.0 --push .
+docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 --build-arg VERSION=1.2.1 \
+  -t <registry>/<namespace>/mikrotik-home-netflow-plus:1.2.1 --push .
 ```
 
 Then put that image name in the compose file. The build stages cross-compile, so building for all three architectures needs no emulation.

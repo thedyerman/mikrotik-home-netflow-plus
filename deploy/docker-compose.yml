@@ -10,10 +10,10 @@
 # Running from an SD card (Raspberry Pi)? Set NFP_FLUSH_INTERVAL=60s in .env.
 #
 # To run a build of your own instead of the published image, build it with the
-# same name first:  docker build -t kcdyer/mikrotik-home-netflow-plus:1.2.0 ..
+# same name first:  docker build -t kcdyer/mikrotik-home-netflow-plus:1.2.1 ..
 services:
   netflow:
-    image: kcdyer/mikrotik-home-netflow-plus:1.2.0
+    image: kcdyer/mikrotik-home-netflow-plus:1.2.1
     container_name: mikrotik-home-netflow-plus
     restart: unless-stopped
     network_mode: host

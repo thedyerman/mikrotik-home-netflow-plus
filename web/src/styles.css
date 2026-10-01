@@ -256,6 +256,8 @@ tr:hover .icon-btn.subtle, .page-title .icon-btn.subtle, .icon-btn.subtle:focus-
 .rank-track { display: block; height: 8px; min-width: 0; }
 .rank-bar { display: flex; gap: 2px; height: 100%; min-width: 3px; }
 .rank.live .rank-bar { transition: width 0.9s ease-out; }
+.rank.live li { animation: row-in 0.5s ease-out; }
+@keyframes row-in { from { opacity: 0; } }
 .rank-seg { flex: 1 1 0; min-width: 2px; }
 .rank.live .rank-seg { transition: flex-basis 0.9s ease-out; }
 .rank-seg:last-child { border-radius: 0 4px 4px 0; }

@@ -80,7 +80,9 @@ function LiveFlows({ device, compact = false }: { device?: number; compact?: boo
   // so the table stops shuffling on every poll. Sorting by transferred bytes
   // is monotonic and needs no such help.
   const order = useRef<string[]>([]);
+  const pending = useRef(new Map<string, number>());
   const groupOrder = useRef<string[]>([]);
+  const groupPending = useRef(new Map<string, number>());
   const units = useRef(new UnitHold()).current;
   const scale = useRef({ down: 0, up: 0, at: 0 });
   const rows = useMemo(() => {
@@ -91,7 +93,7 @@ function LiveFlows({ device, compact = false }: { device?: number; compact?: boo
       filtered.sort((a, b) => value(b) - value(a));
     } else {
       const byKey = new Map(filtered.map((r) => [rowKey(r), r]));
-      order.current = stableOrder(order.current, new Map(filtered.map((r) => [rowKey(r), value(r)])));
+      order.current = stableOrder(order.current, new Map(filtered.map((r) => [rowKey(r), value(r)])), 1.2, 20_000, 2, pending.current);
       filtered.splice(0, filtered.length, ...order.current.map((k) => byKey.get(k)!));
     }
     return { list: filtered, value };
@@ -115,7 +117,7 @@ function LiveFlows({ device, compact = false }: { device?: number; compact?: boo
     const list = [...m.values()];
     if (sort === "total") return list.sort((a, b) => rows.value(b) - rows.value(a));
     const byKey = new Map(list.map((g) => [g.key, g]));
-    groupOrder.current = stableOrder(groupOrder.current, new Map(list.map((g) => [g.key, rows.value(g)])));
+    groupOrder.current = stableOrder(groupOrder.current, new Map(list.map((g) => [g.key, rows.value(g)])), 1.2, 20_000, 2, groupPending.current);
     return groupOrder.current.map((k) => byKey.get(k)!);
   }, [rows, group, sort]);
 

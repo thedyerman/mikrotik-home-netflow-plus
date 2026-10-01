@@ -61,7 +61,7 @@ In the portal, open **Applications → New** and paste the contents of [`deploy/
 ```yaml
 services:
   netflow:
-    image: kcdyer/mikrotik-home-netflow-plus:1.2.0
+    image: kcdyer/mikrotik-home-netflow-plus:1.2.1
     restart: unless-stopped
     network_mode: host
     environment:
@@ -107,7 +107,7 @@ To run without the router API (flow records only), remove the three `NFP_ROUTER_
 
 ## 4. Cut a release
 
-Open **Releases → Cut release** and give it a version, for example `1.2.0`.
+Open **Releases → Cut release** and give it a version, for example `1.2.1`.
 
 A release is an immutable snapshot: the compose text, the image pinned to its digest, and the default configuration. The preflight lists the platforms the image provides. It must include your server's architecture (`linux/amd64` for an x86 server, `linux/arm64` for a Raspberry Pi 4 or 5).
 
@@ -149,8 +149,8 @@ If you build the image yourself, push it to a registry the platform can pull fro
 
 ```sh
 docker login registry.simpledockerops.com
-docker buildx build --platform linux/amd64 --build-arg VERSION=1.2.0 \
-  -t registry.simpledockerops.com/<your-org>/mikrotik-home-netflow-plus:1.2.0 --push .
+docker buildx build --platform linux/amd64 --build-arg VERSION=1.2.1 \
+  -t registry.simpledockerops.com/<your-org>/mikrotik-home-netflow-plus:1.2.1 --push .
 ```
 
 Log in with your portal account, a registry password set in the portal, or an API key. Then use that image name in the compose text. Devices pull from the managed registry with their own credential, so there is no `docker login` to run on the server.
@@ -167,7 +167,7 @@ Everything above can be scripted. With an API key from **Developers** in the por
 # Cut a release, then deploy it
 curl -X POST https://app.simpledockerops.com/api/v1/applications/APP_ID/releases \
   -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
-  -d '{"version":"1.2.0","notes":"calmer live views"}'
+  -d '{"version":"1.2.1","notes":"steadier rankings"}'
 
 curl -X POST https://app.simpledockerops.com/api/v1/deployments \
   -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
