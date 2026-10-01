@@ -151,7 +151,7 @@ DNS naming only works for clients that resolve through the router. Browsers usin
 
 ## Storage
 
-One SQLite file in WAL mode, written in batches every five seconds.
+One SQLite file in WAL mode, written in batches every `NFP_FLUSH_INTERVAL` (20 s by default). Live views never read the database, so the interval only sets how soon history views see new data and how much is at risk on a power cut. Each flush rewrites the same set of pages, which is why a longer interval cuts disk writes almost proportionally: measured on a home network, 5 s wrote about 4 GB a day, 20 s about 1.5 GB and 60 s under 1 GB. SD-card hosts should use 60 s.
 
 | Tier | Resolution | Default retention | Used for |
 |---|---|---|---|

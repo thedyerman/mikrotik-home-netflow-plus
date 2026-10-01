@@ -7,11 +7,13 @@
 # Host networking is used so flow packets arrive with the router's real source
 # address and no port mapping is needed (UDP 2055 for flows, TCP 8080 for the UI).
 #
+# Running from an SD card (Raspberry Pi)? Set NFP_FLUSH_INTERVAL=60s in .env.
+#
 # To run a build of your own instead of the published image, build it with the
-# same name first:  docker build -t kcdyer/mikrotik-home-netflow-plus:1.1.0 ..
+# same name first:  docker build -t kcdyer/mikrotik-home-netflow-plus:1.1.1 ..
 services:
   netflow:
-    image: kcdyer/mikrotik-home-netflow-plus:1.1.0
+    image: kcdyer/mikrotik-home-netflow-plus:1.1.1
     container_name: mikrotik-home-netflow-plus
     restart: unless-stopped
     network_mode: host

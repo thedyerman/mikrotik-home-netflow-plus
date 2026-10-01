@@ -61,7 +61,7 @@ In the portal, open **Applications → New** and paste the contents of [`deploy/
 ```yaml
 services:
   netflow:
-    image: kcdyer/mikrotik-home-netflow-plus:1.1.0
+    image: kcdyer/mikrotik-home-netflow-plus:1.1.1
     restart: unless-stopped
     network_mode: host
     environment:
@@ -72,6 +72,7 @@ services:
       NFP_ROUTER_TLS: "true"
       NFP_SITES: ${SITES}
       NFP_HTTP_LISTEN: ":${HTTP_PORT}"
+      NFP_FLUSH_INTERVAL: ${FLUSH_INTERVAL}
     volumes:
       - netflow-data:/data
 
@@ -96,6 +97,7 @@ There is no `env_file`. A file on your workstation does not exist on the server;
 | `ROUTER_PASSWORD` | The password of the `flowmon` user | **yes** |
 | `SITES` | Optional names for remote sites, for example `office=192.168.99.0/24`. Leave empty if you have none | no |
 | `HTTP_PORT` | `8080`, or another free port | no |
+| `FLUSH_INTERVAL` | `20s`; use `60s` if the device runs from an SD card (a Raspberry Pi), which cuts database writes to a third and spares the card. Live views are unaffected; history lags up to a minute longer | no |
 
 Mark `ROUTER_PASSWORD` as secret. Secret values are stored encrypted and are not shown again after you save them.
 
@@ -105,7 +107,7 @@ To run without the router API (flow records only), remove the three `NFP_ROUTER_
 
 ## 4. Cut a release
 
-Open **Releases → Cut release** and give it a version, for example `1.1.0`.
+Open **Releases → Cut release** and give it a version, for example `1.1.1`.
 
 A release is an immutable snapshot: the compose text, the image pinned to its digest, and the default configuration. The preflight lists the platforms the image provides. It must include your server's architecture (`linux/amd64` for an x86 server, `linux/arm64` for a Raspberry Pi 4 or 5).
 
@@ -147,8 +149,8 @@ If you build the image yourself, push it to a registry the platform can pull fro
 
 ```sh
 docker login registry.simpledockerops.com
-docker buildx build --platform linux/amd64 --build-arg VERSION=1.1.0 \
-  -t registry.simpledockerops.com/<your-org>/mikrotik-home-netflow-plus:1.1.0 --push .
+docker buildx build --platform linux/amd64 --build-arg VERSION=1.1.1 \
+  -t registry.simpledockerops.com/<your-org>/mikrotik-home-netflow-plus:1.1.1 --push .
 ```
 
 Log in with your portal account, a registry password set in the portal, or an API key. Then use that image name in the compose text. Devices pull from the managed registry with their own credential, so there is no `docker login` to run on the server.
@@ -165,7 +167,7 @@ Everything above can be scripted. With an API key from **Developers** in the por
 # Cut a release, then deploy it
 curl -X POST https://app.simpledockerops.com/api/v1/applications/APP_ID/releases \
   -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
-  -d '{"version":"1.1.0","notes":"wall display"}'
+  -d '{"version":"1.1.1","notes":"configurable flush interval"}'
 
 curl -X POST https://app.simpledockerops.com/api/v1/deployments \
   -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \

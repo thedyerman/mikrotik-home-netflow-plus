@@ -236,6 +236,7 @@ Discovered from the router when the live lane is on. Set these to override, or w
 | `NFP_RETENTION_1M` | How long minute rollups are kept | `7d` |
 | `NFP_RETENTION_1H` | How long hourly rollups are kept | `30d` |
 | `NFP_FOLD_BELOW` | Connections smaller than this are counted but not stored one by one | `10KB` |
+| `NFP_FLUSH_INTERVAL` | How often accumulated data is written to the database. Use `60s` on an SD card; see below | `20s` |
 | `NFP_DB_MAX_SIZE` | Database size cap; the oldest fine-grained data is dropped first | `2GB` |
 | `NFP_ASN_DB` | Path to an ASN database in MMDB format | the copy baked into the image |
 
@@ -253,6 +254,14 @@ Everything lives in one SQLite file on the `/data` volume.
 Most connections are tiny: in testing about nine in ten were under 10 kB and together carried well under 1% of the bytes. They are counted in the totals but not stored individually.
 
 To back up, copy the volume while the container is stopped, or copy `netflow.db` together with its `-wal` file.
+
+### Flush interval and SD cards
+
+Live views are served from memory. The database is only written in batches, every `NFP_FLUSH_INTERVAL` (20 seconds by default), and that interval decides two things: how soon new data shows up in the historical views, on top of the 15–75 seconds the router itself takes to export a flow, and how much accounting is lost on a power cut.
+
+It also decides how much is written to disk. Every flush rewrites the same set of 4 kB database pages, so flushing three times less often writes roughly three times fewer bytes. Measured on a home network, a 5-second interval wrote about 4 GB a day against a 13 MB database; 20 seconds brings that to about 1.5 GB and 60 seconds to under 1 GB.
+
+**On a Raspberry Pi or anything else running from an SD card, set `NFP_FLUSH_INTERVAL=60s`.** SD cards have a limited number of write cycles and no wear-levelling worth the name, so the fewer bytes rewritten, the longer the card lasts. The cost is that history views lag up to a minute longer; the live views do not change. On an SSD or a NAS the default is fine.
 
 ## Security and privacy
 
@@ -298,11 +307,11 @@ The Dockerfile builds the web interface, downloads the organisation database and
 
 ```sh
 # a local image for this machine
-docker build --build-arg VERSION=1.1.0 -t mikrotik-home-netflow-plus:dev .
+docker build --build-arg VERSION=1.1.1 -t mikrotik-home-netflow-plus:dev .
 
 # a multi-architecture image, pushed to a registry
-docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 --build-arg VERSION=1.1.0 \
-  -t <registry>/<namespace>/mikrotik-home-netflow-plus:1.1.0 --push .
+docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 --build-arg VERSION=1.1.1 \
+  -t <registry>/<namespace>/mikrotik-home-netflow-plus:1.1.1 --push .
 ```
 
 Then put that image name in the compose file. The build stages cross-compile, so building for all three architectures needs no emulation.

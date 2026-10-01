@@ -23,6 +23,7 @@ import (
 type Options struct {
 	FoldBelow     uint64        // connections smaller than this are not stored individually
 	ConnIdle      time.Duration // a connection with no records for this long is closed
+	FlushInterval time.Duration // how often pending rollups and connections are written to the store
 	Retention     store.Retention
 	StaticTopo    bool     // local networks and sites come from configuration, not the router
 	WANInterfaces []string // configured WAN interface names; empty means discover
@@ -166,6 +167,9 @@ type Engine struct {
 func New(opts Options, st *store.Store, topo *flow.Topology, names *enrich.Names, asn *enrich.ASN, alerts *alert.Manager, log *slog.Logger) (*Engine, error) {
 	if opts.ConnIdle == 0 {
 		opts.ConnIdle = 150 * time.Second
+	}
+	if opts.FlushInterval == 0 {
+		opts.FlushInterval = 20 * time.Second
 	}
 	e := &Engine{
 		opts: opts, st: st, topo: topo, names: names, asn: asn, alerts: alerts, log: log, start: time.Now(),
@@ -571,8 +575,13 @@ func isDirectedBroadcast(ip netip.Addr) bool {
 // ---- flush ----
 
 // Run drives periodic work until ctx is cancelled.
+//
+// Live views are served from memory, so the flush interval only decides how
+// soon new data reaches the historical views and how much is at risk on a
+// power cut. Each flush rewrites the same set of database pages, so a longer
+// interval means proportionally fewer bytes written to disk.
 func (e *Engine) Run(ctx context.Context) {
-	flush := time.NewTicker(5 * time.Second)
+	flush := time.NewTicker(e.opts.FlushInterval)
 	eval := time.NewTicker(15 * time.Second)
 	defer flush.Stop()
 	defer eval.Stop()

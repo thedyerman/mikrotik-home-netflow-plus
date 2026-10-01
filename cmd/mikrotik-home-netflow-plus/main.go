@@ -108,6 +108,7 @@ func run() error {
 	alerts := alert.NewManager(st, appName, log)
 	eng, err := engine.New(engine.Options{
 		FoldBelow:     cfg.FoldBelow,
+		FlushInterval: cfg.FlushInterval,
 		Retention:     store.Retention{Conns: cfg.RetentionConns, Rollup1m: cfg.Retention1m, Rollup1h: cfg.Retention1h, MaxBytes: cfg.DBMaxBytes},
 		StaticTopo:    len(cfg.LocalNets) > 0,
 		WANInterfaces: cfg.WANInterfaces,

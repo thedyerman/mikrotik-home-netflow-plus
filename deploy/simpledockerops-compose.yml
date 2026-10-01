@@ -7,9 +7,12 @@
 #
 # Host networking: flow records arrive on UDP 2055 with the router's real
 # source address, and the web interface is served on HTTP_PORT.
+#
+# FLUSH_INTERVAL: how often data is written to the database. 20s is the
+# default; use 60s on a device that runs from an SD card (less card wear).
 services:
   netflow:
-    image: kcdyer/mikrotik-home-netflow-plus:1.1.0
+    image: kcdyer/mikrotik-home-netflow-plus:1.1.1
     restart: unless-stopped
     network_mode: host
     environment:
@@ -20,6 +23,7 @@ services:
       NFP_ROUTER_TLS: "true"
       NFP_SITES: ${SITES}
       NFP_HTTP_LISTEN: ":${HTTP_PORT}"
+      NFP_FLUSH_INTERVAL: ${FLUSH_INTERVAL}
     volumes:
       - netflow-data:/data
 

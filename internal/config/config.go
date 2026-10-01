@@ -32,6 +32,7 @@ type Config struct {
 	RouterFingerprint string
 
 	ActiveFlowTimeout time.Duration
+	FlushInterval     time.Duration // how often accumulated data is written to the database
 
 	RetentionConns time.Duration
 	Retention1m    time.Duration
@@ -107,6 +108,12 @@ func Load() (*Config, error) {
 
 	if c.ActiveFlowTimeout, err = duration("NFP_ACTIVE_FLOW_TIMEOUT", time.Minute); err != nil {
 		return nil, err
+	}
+	if c.FlushInterval, err = duration("NFP_FLUSH_INTERVAL", 20*time.Second); err != nil {
+		return nil, err
+	}
+	if c.FlushInterval < time.Second || c.FlushInterval > 10*time.Minute {
+		return nil, fmt.Errorf("NFP_FLUSH_INTERVAL: %s is outside 1s..10m", c.FlushInterval)
 	}
 	if c.RetentionConns, err = duration("NFP_RETENTION_CONNECTIONS", 48*time.Hour); err != nil {
 		return nil, err
