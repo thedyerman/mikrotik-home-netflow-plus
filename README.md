@@ -263,6 +263,72 @@ It also decides how much is written to disk. Every flush rewrites the same set o
 
 **On a Raspberry Pi or anything else running from an SD card, set `NFP_FLUSH_INTERVAL=60s`.** SD cards have a limited number of write cycles and no wear-levelling worth the name, so the fewer bytes rewritten, the longer the card lasts. The cost is that history views lag up to a minute longer; the live views do not change. On an SSD or a NAS the default is fine.
 
+### Running from a ramdisk
+
+Putting `/data` on a ramdisk removes flash wear entirely and makes every query fast. The trade is durability, and it has to be understood before choosing this:
+
+> **Everything in `/data` is lost when the host reboots or loses power:** all history, the device names you typed in, acknowledged alerts, the pinned router certificate. The collector starts again empty, re-learns device names from DHCP within a minute, and the history starts from zero. Only use a ramdisk if losing the history on a reboot is acceptable, or together with the backup below.
+
+#### Size
+
+A ramdisk only uses what is stored, so the size is a ceiling. Measured on a home network with about 25 devices:
+
+| Retention | Settings | Expected database | Ramdisk size |
+|---|---|---|---|
+| Default: 7 days of minute data, 30 days of hourly data, 48 hours of connections | none | about 125 MB | **256 MB** |
+| Everything for 30 days | `NFP_RETENTION_1M=30d`, `NFP_RETENTION_CONNECTIONS=30d` | about 550 MB | **1 GB** |
+
+Size grows with the number of devices and how many different destinations they talk to, not with bandwidth: roughly 0.7 MB per device per day while data is being retained. A network with 60 devices keeping everything for 30 days needs about 2 GB.
+
+**Always set `NFP_DB_MAX_SIZE` below the ramdisk size**, for example `700MB` on a 1 GB ramdisk. The collector then prunes its oldest data before the ramdisk can fill up. The default cap of 2 GB is larger than these ramdisks.
+
+#### Setup
+
+Create the ramdisk on the host rather than letting Docker create it. A Docker-managed `tmpfs` is tied to the container, so it would also be wiped every time the container is recreated, which is every upgrade. A host ramdisk survives container upgrades and is lost only on a host reboot. Add to `/etc/fstab`:
+
+```
+tmpfs  /mnt/netflow-ram  tmpfs  size=1g,mode=1777  0  0
+```
+
+Mount it (`sudo mkdir -p /mnt/netflow-ram && sudo mount /mnt/netflow-ram`) and bind it into the container in place of the named volume:
+
+```yaml
+    volumes:
+      - /mnt/netflow-ram:/data
+```
+
+`mode=1777` lets the container's non-root user write to it. Set `NFP_ROUTER_CERT_FINGERPRINT` explicitly: the certificate pin normally lives in `/data`, and re-learning it after every reboot would defeat its purpose.
+
+#### Backing up the ramdisk to flash
+
+An hourly copy to flash turns "lose everything on reboot" into "lose up to an hour". `sqlite3` makes a consistent copy of a database that is in use, so install it on the host (`apt install sqlite3`) and add a cron entry:
+
+```
+0 * * * *  sqlite3 /mnt/netflow-ram/netflow.db ".backup '/var/lib/netflow-backup/netflow.db'"
+```
+
+Do not use `cp` for this: copying a live database without its write-ahead log can produce a corrupt file.
+
+To restore at boot, the copy must be put back **before the container starts**, or the collector will create a fresh database and the restore would overwrite a live one. A `systemd` unit ordered before Docker does that:
+
+```ini
+# /etc/systemd/system/netflow-restore.service
+[Unit]
+Description=Restore the netflow database into the ramdisk
+Before=docker.service
+RequiresMountsFor=/mnt/netflow-ram
+ConditionPathExists=/var/lib/netflow-backup/netflow.db
+
+[Service]
+Type=oneshot
+ExecStart=/bin/cp /var/lib/netflow-backup/netflow.db /mnt/netflow-ram/netflow.db
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable it with `sudo systemctl enable netflow-restore.service`. The hourly backup writes about 125 MB to 550 MB of flash each time, depending on the database size, which is still far less than the continuous writes the ramdisk avoids.
+
 ## Security and privacy
 
 This tool records what every device on your network connects to. Treat the data accordingly.
