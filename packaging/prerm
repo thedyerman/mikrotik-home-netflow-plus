@@ -1,0 +1,12 @@
+#!/bin/sh
+# prerm for mikrotik-home-netflow-plus: stops the service before the files
+# are removed. Upgrades restart it from postinst instead.
+set -e
+
+UNIT=mikrotik-home-netflow-plus.service
+
+if [ "$1" = remove ] && [ -d /run/systemd/system ]; then
+    deb-systemd-invoke stop "$UNIT" >/dev/null || true
+fi
+
+exit 0

@@ -7,6 +7,9 @@ web/node_modules/
 web/dist/*
 !web/dist/.gitkeep
 
+# Release packages built by scripts/build-packages.sh
+dist/
+
 # Secrets and machine-specific files
 deploy/.env
 .env

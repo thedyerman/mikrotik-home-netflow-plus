@@ -1,0 +1,29 @@
+#!/bin/sh
+# postrm for mikrotik-home-netflow-plus. "remove" keeps the settings, the
+# database and the service user so that a reinstall carries on where it left
+# off; "purge" deletes all of them.
+set -e
+
+PKG=mikrotik-home-netflow-plus
+UNIT=$PKG.service
+DATA=/var/lib/$PKG
+
+if [ "$1" = remove ] && [ -d /run/systemd/system ]; then
+    systemctl --system daemon-reload >/dev/null || true
+fi
+
+if [ "$1" = purge ]; then
+    if command -v deb-systemd-helper >/dev/null 2>&1; then
+        deb-systemd-helper purge "$UNIT" >/dev/null || true
+        deb-systemd-helper unmask "$UNIT" >/dev/null || true
+    fi
+    rm -rf "$DATA" "/etc/$PKG"
+    if getent passwd "$PKG" >/dev/null; then
+        deluser --system --quiet "$PKG" >/dev/null 2>&1 || true
+    fi
+    if getent group "$PKG" >/dev/null; then
+        delgroup --system --quiet "$PKG" >/dev/null 2>&1 || true
+    fi
+fi
+
+exit 0

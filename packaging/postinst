@@ -1,0 +1,53 @@
+#!/bin/sh
+# postinst for mikrotik-home-netflow-plus: creates the service user and data
+# directory, then enables and starts the service the way debhelper's snippets
+# do, so a service the administrator disabled stays disabled across upgrades.
+set -e
+
+PKG=mikrotik-home-netflow-plus
+UNIT=$PKG.service
+DATA=/var/lib/$PKG
+
+if [ "$1" = configure ]; then
+    if ! getent passwd "$PKG" >/dev/null; then
+        adduser --system --group --quiet --home "$DATA" --no-create-home \
+            --shell /usr/sbin/nologin --gecos "$PKG collector" "$PKG"
+    fi
+    if [ ! -d "$DATA" ]; then
+        install -d -m 0750 -o "$PKG" -g "$PKG" "$DATA"
+    fi
+fi
+
+if [ "$1" = configure ] || [ "$1" = abort-upgrade ] || [ "$1" = abort-deconfigure ] || [ "$1" = abort-remove ]; then
+    deb-systemd-helper unmask "$UNIT" >/dev/null || true
+    if deb-systemd-helper --quiet was-enabled "$UNIT"; then
+        deb-systemd-helper enable "$UNIT" >/dev/null || true
+    else
+        deb-systemd-helper update-state "$UNIT" >/dev/null || true
+    fi
+    if [ -d /run/systemd/system ]; then
+        systemctl --system daemon-reload >/dev/null || true
+        if [ -n "$2" ]; then
+            # An upgrade restarts the service only if it is running.
+            deb-systemd-invoke try-restart "$UNIT" >/dev/null || true
+        else
+            deb-systemd-invoke start "$UNIT" >/dev/null || true
+        fi
+    fi
+fi
+
+if [ "$1" = configure ] && [ -z "$2" ]; then
+    cat <<EOF
+
+mikrotik-home-netflow-plus runs from flow records only until configured:
+  1. Put the router's address and API user in /etc/$PKG/env,
+     then: systemctl restart $PKG
+  2. Point the router at this host: the Status page of the web interface
+     (port 8080) shows the commands, or see
+     /usr/share/doc/$PKG/SETUP-MIKROTIK-ROUTER.md
+  3. Optional, organisation labels for destinations: $PKG-fetch-asn
+
+EOF
+fi
+
+exit 0

@@ -1,0 +1,78 @@
+# Debian package definition for nfpm (https://nfpm.goreleaser.com).
+# scripts/build-packages.sh compiles the binary into dist/stage, generates the
+# changelog and compressed manual pages there, and sets VERSION and NFPM_ARCH
+# before calling nfpm; see that script for the architectures.
+name: mikrotik-home-netflow-plus
+arch: "${NFPM_ARCH}"
+platform: linux
+version: "${VERSION}"
+section: net
+priority: optional
+maintainer: kc <kc@dyertech.ca>
+homepage: https://github.com/thedyerman/mikrotik-home-netflow-plus
+license: Apache-2.0
+description: |
+  Live and historical network traffic for MikroTik routers
+  Receives IPFIX flow export from a MikroTik router, optionally polls the
+  RouterOS API with a read-only user, and serves a web interface that shows
+  traffic per connection and per device, right now and over the last days,
+  with alerts and a full-screen wall display. A single static binary with an
+  SQLite database, run as a dedicated system user under systemd.
+
+# The maintainer scripts also use deb-systemd-helper and deb-systemd-invoke
+# from init-system-helpers, which is Essential and therefore not listed.
+depends:
+  - adduser
+recommends:
+  - curl
+
+contents:
+  - src: dist/stage/mikrotik-home-netflow-plus
+    dst: /usr/bin/mikrotik-home-netflow-plus
+    file_info:
+      mode: 0755
+
+  - src: packaging/mikrotik-home-netflow-plus.service
+    dst: /usr/lib/systemd/system/mikrotik-home-netflow-plus.service
+    file_info:
+      mode: 0644
+
+  # Settings. A conffile: dpkg keeps the administrator's edits on upgrade.
+  # Root-only because it holds the router API password.
+  - src: packaging/env
+    dst: /etc/mikrotik-home-netflow-plus/env
+    type: config
+    file_info:
+      mode: 0600
+
+  - src: packaging/fetch-asn
+    dst: /usr/bin/mikrotik-home-netflow-plus-fetch-asn
+    file_info:
+      mode: 0755
+
+  - src: packaging/copyright
+    dst: /usr/share/doc/mikrotik-home-netflow-plus/copyright
+  - src: dist/stage/changelog.gz
+    dst: /usr/share/doc/mikrotik-home-netflow-plus/changelog.gz
+  - src: NOTICE
+    dst: /usr/share/doc/mikrotik-home-netflow-plus/NOTICE
+  - src: README.md
+    dst: /usr/share/doc/mikrotik-home-netflow-plus/README.md
+  - src: SETUP-MIKROTIK-ROUTER.md
+    dst: /usr/share/doc/mikrotik-home-netflow-plus/SETUP-MIKROTIK-ROUTER.md
+  - src: deploy/routeros-setup.rsc
+    dst: /usr/share/doc/mikrotik-home-netflow-plus/examples/routeros-setup.rsc
+  - src: dist/stage/mikrotik-home-netflow-plus.8.gz
+    dst: /usr/share/man/man8/mikrotik-home-netflow-plus.8.gz
+  - src: dist/stage/mikrotik-home-netflow-plus-fetch-asn.8.gz
+    dst: /usr/share/man/man8/mikrotik-home-netflow-plus-fetch-asn.8.gz
+  - src: packaging/lintian-overrides
+    dst: /usr/share/lintian/overrides/mikrotik-home-netflow-plus
+
+scripts:
+  postinstall: packaging/postinst
+  preremove: packaging/prerm
+  postremove: packaging/postrm
+
+deb:
+  compression: xz

@@ -1,0 +1,25 @@
+.TH MIKROTIK-HOME-NETFLOW-PLUS-FETCH-ASN 8 "October 2026" "mikrotik-home-netflow-plus" "System Administration"
+.SH NAME
+mikrotik-home-netflow-plus-fetch-asn \- download the organisation (ASN) database for mikrotik-home-netflow-plus
+.SH SYNOPSIS
+.B mikrotik-home-netflow-plus-fetch-asn
+.SH DESCRIPTION
+Downloads the current IP to ASN Lite database published by DB-IP
+(https://db-ip.com, Creative Commons Attribution 4.0) to
+.I /var/lib/mikrotik-home-netflow-plus/asn.mmdb
+so that destinations without a DNS name are labelled with the organisation
+that owns the address, for example "Cloudflare" instead of a bare address.
+If the service is running it is restarted, because the database is read at
+start.
+.PP
+A new edition is published every month; run the command again to refresh.
+It must run as root, needs
+.BR curl (1)
+or
+.BR wget (1),
+and needs the data directory to exist, which it does once the service has
+started. Set
+.B NFP_DATA_DIR
+to use a different directory.
+.SH SEE ALSO
+.BR mikrotik-home-netflow-plus (8)

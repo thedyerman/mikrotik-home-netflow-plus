@@ -1,0 +1,5 @@
+# Go builds a static binary; the package deliberately has no shared-library
+# dependencies.
+mikrotik-home-netflow-plus: statically-linked-binary [usr/bin/mikrotik-home-netflow-plus]
+# The settings file holds the router API password, so it is readable by root only.
+mikrotik-home-netflow-plus: non-standard-file-perm 0600 != 0644 [etc/mikrotik-home-netflow-plus/env]

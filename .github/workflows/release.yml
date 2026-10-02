@@ -1,0 +1,66 @@
+# Builds the Debian packages and standalone binaries for a release tag,
+# publishes the packages to the apt repository and attaches everything to a
+# GitHub release.
+#
+# The apt repository (Buildkite Package Registries) accepts the workflow's
+# OIDC token under a policy restricted to this repository and tags named
+# v*, so no long-lived secret is stored here.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # create the GitHub release
+  id-token: write # OIDC token for the apt repository
+
+env:
+  BK_ORG: mikrotik-home-netflow-plus
+  BK_REGISTRY: mikrotik-home-netflow-plus
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build packages
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          scripts/build-packages.sh "$VERSION"
+
+      - name: Publish to the apt repository
+        run: |
+          jwt=$(curl -sSf -G --data-urlencode "audience=https://packages.buildkite.com/$BK_ORG/$BK_REGISTRY" \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r .value)
+          echo "::add-mask::$jwt"
+          for f in dist/*.deb; do
+            code=$(curl -sS -o response.json -w '%{http_code}' -X POST \
+              "https://api.buildkite.com/v2/packages/organizations/$BK_ORG/registries/$BK_REGISTRY/packages" \
+              -H "Authorization: Bearer $jwt" -F "file=@$f")
+            case $code in
+              2*) echo "published $(basename "$f")" ;;
+              409) echo "already published: $(basename "$f")" ;;
+              *) echo "::error::$(basename "$f"): HTTP $code $(cat response.json)"; exit 1 ;;
+            esac
+          done
+
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 ||
+            gh release create "$GITHUB_REF_NAME" --title "$VERSION" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" dist/*.deb dist/*.tar.gz dist/SHA256SUMS --clobber

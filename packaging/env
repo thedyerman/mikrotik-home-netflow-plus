@@ -1,0 +1,46 @@
+# Settings for the mikrotik-home-netflow-plus service, one NAME=value per line.
+# After editing:  sudo systemctl restart mikrotik-home-netflow-plus
+#
+# Keep this file readable by root only: it holds the router API password.
+# Every variable is described in /usr/share/doc/mikrotik-home-netflow-plus/README.md
+# and at https://github.com/thedyerman/mikrotik-home-netflow-plus#configuration
+#
+# With everything commented out, the collector runs from flow records alone and
+# accepts them from any address. The Status page of the web interface
+# (http://<this host>:8080) shows the router commands with your addresses
+# filled in.
+
+# The router that exports flow records. Packets from other addresses are dropped.
+#NFP_EXPORTERS=192.168.88.1
+
+# Router API: adds second-by-second rates, device names and DNS names. Needs a
+# read-only user on the router (policy "read,api"); see SETUP-MIKROTIK-ROUTER.md.
+#NFP_ROUTER_ADDR=192.168.88.1
+#NFP_ROUTER_USER=flowmon
+#NFP_ROUTER_PASSWORD=change-me
+# true  = api-ssl on 8729 (needs a certificate on the router; pinned on first use)
+# false = plain api on 8728
+#NFP_ROUTER_TLS=true
+
+# A friendlier name for a remote site than its tunnel interface name.
+#NFP_SITES=office=192.168.99.0/24
+
+# Require a password for the web interface.
+#NFP_AUTH_PASSWORD=
+
+# Listen addresses (defaults shown).
+#NFP_HTTP_LISTEN=:8080
+#NFP_FLOW_LISTEN=:2055
+
+# Retention and size (defaults shown).
+#NFP_RETENTION_CONNECTIONS=48h
+#NFP_RETENTION_1M=7d
+#NFP_RETENTION_1H=30d
+#NFP_FOLD_BELOW=10KB
+#NFP_DB_MAX_SIZE=2GB
+
+# How often data is written to the database (default 20s). On a Raspberry Pi
+# or any host running from an SD card use 60s: each flush rewrites the same
+# database pages, so a longer interval means far fewer bytes written and less
+# card wear. Live views are served from memory and are not affected.
+#NFP_FLUSH_INTERVAL=60s

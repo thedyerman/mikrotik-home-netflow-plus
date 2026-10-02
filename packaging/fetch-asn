@@ -1,0 +1,66 @@
+#!/bin/sh
+# Downloads the IP to ASN Lite database by DB-IP (https://db-ip.com), licensed
+# CC BY 4.0, so that destinations without a DNS name are labelled with the
+# organisation that owns the address. The container image ships this file; the
+# Debian package does not, to keep it small and current.
+#
+# A new edition is published each month: run this again to refresh. The
+# service is restarted if it is running, because the database is read at start.
+#
+# Usage: sudo mikrotik-home-netflow-plus-fetch-asn
+set -eu
+
+dir=${NFP_DATA_DIR:-/var/lib/mikrotik-home-netflow-plus}
+out=$dir/asn.mmdb
+tmp=$out.part
+service=mikrotik-home-netflow-plus
+
+if [ ! -d "$dir" ]; then
+    echo "$0: $dir does not exist; start the service once first" >&2
+    exit 1
+fi
+if [ ! -w "$dir" ]; then
+    echo "$0: cannot write to $dir; run with sudo" >&2
+    exit 1
+fi
+
+fetch() {
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$1"
+    else
+        wget -qO- "$1"
+    fi
+}
+
+trap 'rm -f "$tmp" "$tmp.gz"' EXIT
+
+# This month's file, or last month's if it is not published yet.
+year=$(date -u +%Y)
+month=$(date -u +%m)
+month=${month#0}
+if [ "$month" -eq 1 ]; then
+    prev_year=$((year - 1)); prev_month=12
+else
+    prev_year=$year; prev_month=$((month - 1))
+fi
+got=
+for edition in "$(printf '%04d-%02d' "$year" "$month")" "$(printf '%04d-%02d' "$prev_year" "$prev_month")"; do
+    if fetch "https://download.db-ip.com/free/dbip-asn-lite-$edition.mmdb.gz" > "$tmp.gz" && [ -s "$tmp.gz" ]; then
+        got=$edition
+        break
+    fi
+done
+if [ -z "$got" ]; then
+    echo "$0: could not download the database from download.db-ip.com" >&2
+    exit 1
+fi
+
+gunzip -c "$tmp.gz" > "$tmp"
+chmod 0644 "$tmp"
+mv -f "$tmp" "$out"
+echo "wrote $out (DB-IP ASN Lite $got)"
+
+if [ -d /run/systemd/system ] && systemctl -q is-active "$service" 2>/dev/null; then
+    systemctl restart "$service"
+    echo "restarted $service"
+fi

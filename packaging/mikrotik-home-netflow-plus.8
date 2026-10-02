@@ -1,0 +1,122 @@
+.TH MIKROTIK-HOME-NETFLOW-PLUS 8 "October 2026" "mikrotik-home-netflow-plus" "System Administration"
+.SH NAME
+mikrotik-home-netflow-plus \- network traffic per connection and per device for MikroTik routers
+.SH SYNOPSIS
+.B mikrotik-home-netflow-plus
+.br
+.B mikrotik-home-netflow-plus version
+.br
+.B mikrotik-home-netflow-plus healthcheck
+.br
+.B mikrotik-home-netflow-plus replay
+.I capture.bin
+.RI [ host:port
+.RI [ speed ]]
+.SH DESCRIPTION
+.B mikrotik-home-netflow-plus
+receives IPFIX flow records exported by a MikroTik router (RouterOS Traffic
+Flow) on UDP port 2055, optionally polls the RouterOS API with a read-only
+user for second-by-second rates and device names, and serves a web
+interface on TCP port 8080 showing traffic per connection and per device,
+right now and over the last days, with alerts and a full-screen wall
+display at
+.IR /dashboard .
+.PP
+The Debian package runs it as the systemd service
+.BR mikrotik-home-netflow-plus.service ,
+as the system user of the same name, with its database under
+.IR /var/lib/mikrotik-home-netflow-plus .
+Settings are read from
+.IR /etc/mikrotik-home-netflow-plus/env ;
+restart the service after editing it.
+.SH SUBCOMMANDS
+.TP
+.B version
+Print the version and exit.
+.TP
+.B healthcheck
+Exit 0 if the web interface answers on the configured listen address, 1
+otherwise. Used by the container image's health check.
+.TP
+.BI replay " capture.bin " [ host:port " [" speed ]]
+Send a recorded flow export capture to a collector (default 127.0.0.1:2055)
+with its original timing, optionally sped up. A development aid.
+.SH ENVIRONMENT
+Every setting is an environment variable; the service reads them from
+.IR /etc/mikrotik-home-netflow-plus/env .
+Secrets can also be given as a file name in
+.IB NAME _FILE\fR.
+The full reference, with the reasoning behind each default, is in the README
+listed under FILES.
+.TP
+.B NFP_EXPORTERS
+Addresses allowed to send flow records, comma separated. Default: the
+router API host; with neither set, records from any address are accepted.
+.TP
+.BR NFP_ROUTER_ADDR ", " NFP_ROUTER_USER ", " NFP_ROUTER_PASSWORD
+Router API host and the read-only user (policy
+.BR read,api ).
+Without NFP_ROUTER_ADDR the collector runs from flow records only.
+.TP
+.B NFP_ROUTER_TLS
+.B true
+for api-ssl on port 8729 (the certificate is pinned on first use),
+.B false
+for the plain API on 8728. Default: true.
+.TP
+.B NFP_ROUTER_CERT_FINGERPRINT
+Expected SHA-256 fingerprint of the router's API certificate, instead of
+trust on first use.
+.TP
+.BR NFP_LOCAL_NETS ", " NFP_SITES ", " NFP_WAN_INTERFACES
+Override the networks discovered from the router: local prefixes, named
+remote sites as
+.IR name=cidr ,
+and WAN interface names.
+.TP
+.BR NFP_HTTP_LISTEN ", " NFP_FLOW_LISTEN
+Listen addresses. Defaults: :8080 and :2055.
+.TP
+.B NFP_AUTH_PASSWORD
+Require this password for the web interface. Default: no login.
+.TP
+.BR NFP_RETENTION_CONNECTIONS ", " NFP_RETENTION_1M ", " NFP_RETENTION_1H
+How long to keep the connection log, per-minute and per-hour history.
+Defaults: 48h, 7d, 30d.
+.TP
+.BR NFP_FOLD_BELOW ", " NFP_DB_MAX_SIZE
+Connections smaller than NFP_FOLD_BELOW (default 10KB) are folded into a
+per-device summary; the database is pruned to stay under NFP_DB_MAX_SIZE
+(default 2GB).
+.TP
+.B NFP_FLUSH_INTERVAL
+How often accumulated data is written to the database, 1s to 10m. Default
+20s; 60s is recommended on SD cards.
+.TP
+.B NFP_ACTIVE_FLOW_TIMEOUT
+The router's active-flow-timeout. Default 1m.
+.TP
+.B NFP_ASN_DB
+Path to a MaxMind-format IP to ASN database. Default: asn.mmdb in the data
+directory, as written by
+.BR mikrotik-home-netflow-plus-fetch-asn (8).
+.TP
+.BR NFP_DATA_DIR ", " NFP_LOG_LEVEL
+Data directory (the service sets /var/lib/mikrotik-home-netflow-plus) and
+log level (debug, info, warn, error; default info).
+.SH FILES
+.TP
+.I /etc/mikrotik-home-netflow-plus/env
+Settings, readable by root only.
+.TP
+.I /var/lib/mikrotik-home-netflow-plus/
+Database, flow template cache, pinned router certificate and the optional
+organisation database.
+.TP
+.I /usr/share/doc/mikrotik-home-netflow-plus/
+README.md, SETUP-MIKROTIK-ROUTER.md and an example RouterOS script.
+.SH SEE ALSO
+.BR mikrotik-home-netflow-plus-fetch-asn (8),
+.BR systemctl (1)
+.PP
+https://github.com/thedyerman/mikrotik-home-netflow-plus

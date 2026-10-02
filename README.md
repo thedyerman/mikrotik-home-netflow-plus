@@ -10,6 +10,8 @@ One Go binary, one container, one SQLite file. No cloud service, no agents on yo
 docker pull kcdyer/mikrotik-home-netflow-plus:latest
 ```
 
+**No Docker?** There is an apt repository for Debian, Ubuntu and Raspberry Pi OS (amd64, arm64, armhf) that installs it as a systemd service: see [Install with apt](#install-with-apt). Standalone binaries are attached to every [GitHub release](https://github.com/thedyerman/mikrotik-home-netflow-plus/releases).
+
 - See what is using the connection **right now**, second by second.
 - See which **device** talked to which **destination** over the last hour, day, week or month.
 - Put a **wall display** on a small screen that shows the network at a glance.
@@ -23,6 +25,7 @@ docker pull kcdyer/mikrotik-home-netflow-plus:latest
 - [Features](#features)
 - [Requirements](#requirements)
 - [Quick start](#quick-start)
+- [Install with apt](#install-with-apt)
 - [Setup guides](#setup-guides)
 - [The web interface](#the-web-interface)
 - [Wall display](#wall-display)
@@ -96,7 +99,7 @@ The design, and the RouterOS behaviour it was built around, are described in [do
 | What | Details |
 |---|---|
 | Router | MikroTik with **RouterOS 7**. Developed against 7.20 on an L009; any device that supports Traffic Flow should work |
-| Host | Any Linux machine with Docker and Compose v2, on the same network as the router. The public image on Docker Hub covers amd64, arm64 and ARMv7, so a Raspberry Pi works as well as an x86 server |
+| Host | Any Linux machine on the same network as the router, either with Docker and Compose v2 or running Debian, Ubuntu or Raspberry Pi OS for the [apt package](#install-with-apt). The image and the packages cover amd64, arm64 and 32-bit ARM, so a Raspberry Pi works as well as an x86 server |
 | Resources | Well under 200 MB RAM and negligible CPU for a home network; 2 GB of disk by default |
 | Ports | UDP 2055 (flow records in), TCP 8080 (web interface). Both configurable |
 
@@ -129,6 +132,33 @@ Then configure the router so it sends flow records to this host: see [SETUP-MIKR
 Open `http://<host>:8080`. The **Status** page tells you whether flow records are arriving and shows the complete router script with your addresses filled in.
 
 The compose file uses host networking, so flow packets arrive with the router's real source address and no port mapping is needed.
+
+## Install with apt
+
+For Debian, Ubuntu and Raspberry Pi OS without Docker. The packages contain the same static binary as the image, a systemd unit and a settings file, and are built for amd64, arm64 and armhf (every 32-bit Raspberry Pi, including the Zero). They are hosted on a signed apt repository ([Buildkite Package Registries](https://buildkite.com/docs/package-registries)).
+
+```sh
+sudo apt install -y curl gpg
+sudo install -d /etc/apt/keyrings
+curl -fsSL https://packages.buildkite.com/mikrotik-home-netflow-plus/mikrotik-home-netflow-plus/gpgkey \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/mikrotik-home-netflow-plus-archive-keyring.gpg
+echo "deb [signed-by=/etc/apt/keyrings/mikrotik-home-netflow-plus-archive-keyring.gpg] https://packages.buildkite.com/mikrotik-home-netflow-plus/mikrotik-home-netflow-plus/any/ any main" \
+  | sudo tee /etc/apt/sources.list.d/mikrotik-home-netflow-plus.list
+sudo apt update
+sudo apt install mikrotik-home-netflow-plus
+```
+
+The service starts immediately and at every boot, as the system user `mikrotik-home-netflow-plus` with its database in `/var/lib/mikrotik-home-netflow-plus`. Until it is configured it runs from flow records only and accepts them from any address. Then:
+
+1. Put the router's address and the read-only API user in `/etc/mikrotik-home-netflow-plus/env` (readable by root only, since it holds the password) and run `sudo systemctl restart mikrotik-home-netflow-plus`.
+2. Point the router at this host: [SETUP-MIKROTIK-ROUTER.md](SETUP-MIKROTIK-ROUTER.md), or copy the commands from the Status page at `http://<host>:8080`.
+3. Optional: `sudo mikrotik-home-netflow-plus-fetch-asn` downloads the organisation database (IP to ASN Lite by DB-IP, about 8 MB) so that destinations without a DNS name are labelled with the owning organisation rather than a bare address. The image has it built in; the package leaves it out to stay small and current. A new edition is published monthly; run the command again to refresh.
+
+Day to day: `systemctl status mikrotik-home-netflow-plus`, `journalctl -u mikrotik-home-netflow-plus` and `man mikrotik-home-netflow-plus`. New releases arrive with the normal `apt upgrade`; the settings file is kept (dpkg asks if the packaged copy changed), and a running service is restarted. `apt remove` keeps the settings, the database and the user for a later reinstall; `apt purge` deletes all three.
+
+The unit runs the binary in systemd's sandbox: read-only system, private `/tmp`, no capabilities, a system-call filter. The default ports need nothing more; to listen on a port below 1024, add a drop-in (`systemctl edit mikrotik-home-netflow-plus`) containing `[Service]` and `AmbientCapabilities=CAP_NET_BIND_SERVICE`.
+
+**Other distributions:** every [GitHub release](https://github.com/thedyerman/mikrotik-home-netflow-plus/releases) has `mikrotik-home-netflow-plus_<version>_linux_<arch>.tar.gz` with the bare static binary (no dependencies, not even libc). Unpack it, set `NFP_DATA_DIR` to a writable directory and run it; the unit file and settings template in [`packaging/`](packaging/) are a good starting point for a service.
 
 ## Setup guides
 
@@ -295,6 +325,8 @@ Size grows with the number of devices and how many different destinations they t
 
 #### Setup
 
+With the apt package, mount the tmpfs on `/var/lib/mikrotik-home-netflow-plus` itself (`uid=mikrotik-home-netflow-plus,gid=mikrotik-home-netflow-plus,mode=0750` in the fstab options) and point the backup below at that directory; the rest is the same.
+
 Create the ramdisk on the host rather than letting Docker create it. A Docker-managed `tmpfs` is tied to the container, so it would also be wiped every time the container is recreated, which is every upgrade. A host ramdisk survives container upgrades and is lost only on a host reboot. Add to `/etc/fstab`:
 
 ```
@@ -344,12 +376,12 @@ Enable it with `sudo systemctl enable netflow-restore.service`. The hourly backu
 
 This tool records what every device on your network connects to. Treat the data accordingly.
 
-- **It stays local.** The collector makes no outbound connections except to your router and to a webhook you configure. The organisation database is baked into the image at build time.
+- **It stays local.** The collector makes no outbound connections except to your router and to a webhook you configure. The organisation database is baked into the image at build time; with the apt package it is downloaded only when you run `mikrotik-home-netflow-plus-fetch-asn`.
 - **The router account is read-only**, with only the `read` and `api` policies, and restricted to the collector's address on the router. The collector never needs an administrative account.
 - **The API session is encrypted** and the router's certificate is pinned on first use. A changed certificate is refused until you remove the pin.
 - **Flow packets are accepted only from configured exporters.**
 - **The web interface has no login by default.** Set `NFP_AUTH_PASSWORD` if anyone else can reach the host, and put a reverse proxy with TLS in front of it if it is exposed beyond your LAN.
-- **Keep secrets out of version control.** `deploy/.env` is git-ignored. Prefer `NFP_ROUTER_PASSWORD_FILE` or your platform's secret store.
+- **Keep secrets out of version control.** `deploy/.env` is git-ignored. Prefer `NFP_ROUTER_PASSWORD_FILE` or your platform's secret store. The apt package keeps its settings in `/etc/mikrotik-home-netflow-plus/env`, readable by root only, and runs the service as an unprivileged user inside systemd's sandbox.
 
 ## Limitations
 
@@ -395,6 +427,17 @@ Then put that image name in the compose file. The build stages cross-compile, so
 
 The image is about 12 MB to download (40 MB unpacked). It has a built-in health check (`/mikrotik-home-netflow-plus healthcheck`), so orchestrators can tell when it is ready.
 
+### Debian packages and binaries
+
+```sh
+scripts/build-packages.sh 1.2.2            # all three architectures
+scripts/build-packages.sh 1.2.2 arm64      # just one
+```
+
+This cross-compiles the static binary for amd64, arm64 and armhf and wraps each one with [nfpm](https://nfpm.goreleaser.com) (fetched by `go run`) according to [`packaging/nfpm.yaml`](packaging/nfpm.yaml): the unit file, the settings template, the maintainer scripts that create the service user and enable the service, the `fetch-asn` helper and the manual pages. The output in `dist/` is the `.deb` files, a `.tar.gz` per architecture with the bare binary, and `SHA256SUMS`.
+
+The release workflow ([`.github/workflows/release.yml`](.github/workflows/release.yml)) runs the same script for every `v*` tag, publishes the packages to the apt repository and attaches everything to the GitHub release. It authenticates to the repository with the workflow's OIDC token, which the registry's policy accepts only from this repository's `v*` tags, so no publishing secret is stored anywhere. A fork needs its own registry: change `BK_ORG` and `BK_REGISTRY` in the workflow and set a matching OIDC policy on it.
+
 ## Development
 
 Requires Go 1.26 or newer and Node 22 or newer.
@@ -439,14 +482,16 @@ internal/api                     HTTP API, WebSocket feed, authentication, stati
 internal/config                  environment configuration
 web                              React interface (Vite, TypeScript)
 deploy                           compose files, env example, router script
+packaging                        Debian package: unit file, settings template, maintainer scripts, man pages
+.github/workflows                release build: packages, apt repository, GitHub release
 docs                             design notes
-scripts                          development helpers
+scripts                          development helpers and the package build
 testdata/captures                anonymised sample capture and ground truth
 ```
 
 ## Acknowledgements
 
-- Organisation labels use IP to ASN Lite data by [DB-IP](https://db-ip.com), licensed CC BY 4.0. It is downloaded when the image is built.
+- Organisation labels use IP to ASN Lite data by [DB-IP](https://db-ip.com), licensed CC BY 4.0. It is downloaded when the image is built, or by `mikrotik-home-netflow-plus-fetch-asn` for the apt package.
 - MAC vendor names come from the IEEE Registration Authority's public listings.
 - Charts are drawn with [uPlot](https://github.com/leeoniya/uPlot); the flow map layout is [d3-sankey](https://github.com/d3/d3-sankey).
 - Storage is [SQLite](https://sqlite.org) through [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite).
