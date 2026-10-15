@@ -210,51 +210,50 @@ export function useLiveRanking<T extends RateLike>(items: T[], opts: LiveRanking
 
 // ---- reorder animation ----
 
-/** Runs fn on the next frame, or after a short timeout where frame callbacks never arrive (off-screen kiosk players). */
-function nextFrame(fn: () => void) {
-  let done = false;
-  const run = () => {
-    if (done) return;
-    done = true;
-    fn();
-  };
-  requestAnimationFrame(run);
-  window.setTimeout(run, 50);
+/**
+ * A row's top within the list, in its own pixels. offsetTop ignores transforms,
+ * so neither a slide in progress nor the wall display's scale() is measured.
+ */
+function layoutTop(list: HTMLElement, row: HTMLElement): number {
+  return row.offsetParent === list ? row.offsetTop : row.offsetTop - list.offsetTop;
 }
 
 /**
- * Animates rows that change position: every element with a data-flip
- * attribute inside the container slides from where it was to where it is.
- * The animation is skipped when the page is not visible, so a row is never
- * left displaced if the end of the slide cannot be scheduled.
+ * Slides the container's data-flip children to their new slots when the order
+ * changes. Runs after every render so the recorded tops are never stale.
  */
-export function useFlip(ref: RefObject<HTMLElement | null>, deps: unknown) {
-  const prev = useRef(new Map<string, number>());
+export function useFlip(ref: RefObject<HTMLElement | null>) {
+  const prev = useRef({ order: "", tops: new Map<string, number>() });
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el) return;
-    const base = el.getBoundingClientRect().top;
-    const next = new Map<string, number>();
-    const moves: [HTMLElement, number][] = [];
-    el.querySelectorAll<HTMLElement>("[data-flip]").forEach((c) => {
-      const k = c.dataset.flip!;
-      const top = c.getBoundingClientRect().top - base;
-      next.set(k, top);
-      const old = prev.current.get(k);
-      if (old !== undefined && Math.abs(old - top) > 0.5) moves.push([c, old - top]);
-    });
-    prev.current = next;
-    if (moves.length === 0 || document.visibilityState !== "visible" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    for (const [c, dy] of moves) {
-      c.style.transition = "none";
-      c.style.transform = `translateY(${dy}px)`;
+    if (!el) {
+      prev.current = { order: "", tops: new Map() }; // unmounted while empty: start afresh when it returns
+      return;
     }
-    void el.offsetHeight; // commit the start position before animating to the end
-    nextFrame(() => {
-      for (const [c] of moves) {
-        c.style.transition = "transform 320ms ease";
-        c.style.transform = "";
-      }
-    });
-  }, [ref, deps]);
+    const rows: [HTMLElement, string, number][] = [];
+    const tops = new Map<string, number>();
+    for (const row of el.querySelectorAll<HTMLElement>(":scope > [data-flip]")) {
+      const key = row.dataset.flip;
+      if (!key || tops.has(key)) continue;
+      const top = layoutTop(el, row);
+      tops.set(key, top);
+      rows.push([row, key, top]);
+    }
+    const order = rows.map(([, key]) => key).join("\0");
+    const last = prev.current;
+    prev.current = { order, tops };
+    if (order === last.order || document.visibilityState !== "visible" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const moves: [HTMLElement, number][] = [];
+    for (const [row, key, top] of rows) {
+      const old = last.tops.get(key);
+      if (old === undefined || Math.abs(old - top) <= 0.5) continue;
+      // Start where the row is drawn: a slide interrupted by another reorder carries on from there.
+      moves.push([row, old - top + new DOMMatrixReadOnly(getComputedStyle(row).transform).m42]);
+    }
+    // A Web Animation, not a CSS transition: it survives React moving the row's node and leaves no style behind.
+    for (const [row, dy] of moves) {
+      for (const a of row.getAnimations()) if (a.id === "flip") a.cancel();
+      row.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { id: "flip", duration: 320, easing: "ease" });
+    }
+  });
 }

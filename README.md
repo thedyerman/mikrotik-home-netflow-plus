@@ -416,11 +416,11 @@ The Dockerfile builds the web interface, downloads the organisation database and
 
 ```sh
 # a local image for this machine
-docker build --build-arg VERSION=1.2.2 -t mikrotik-home-netflow-plus:dev .
+docker build --build-arg VERSION=1.2.3 -t mikrotik-home-netflow-plus:dev .
 
 # a multi-architecture image, pushed to a registry
-docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 --build-arg VERSION=1.2.2 \
-  -t <registry>/<namespace>/mikrotik-home-netflow-plus:1.2.2 --push .
+docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 --build-arg VERSION=1.2.3 \
+  -t <registry>/<namespace>/mikrotik-home-netflow-plus:1.2.3 --push .
 ```
 
 Then put that image name in the compose file. The build stages cross-compile, so building for all three architectures needs no emulation.
@@ -430,8 +430,8 @@ The image is about 12 MB to download (40 MB unpacked). It has a built-in health 
 ### Debian packages and binaries
 
 ```sh
-scripts/build-packages.sh 1.2.2            # all three architectures
-scripts/build-packages.sh 1.2.2 arm64      # just one
+scripts/build-packages.sh 1.2.3            # all three architectures
+scripts/build-packages.sh 1.2.3 arm64      # just one
 ```
 
 This cross-compiles the static binary for amd64, arm64 and armhf and wraps each one with [nfpm](https://nfpm.goreleaser.com) (fetched by `go run`) according to [`packaging/nfpm.yaml`](packaging/nfpm.yaml): the unit file, the settings template, the maintainer scripts that create the service user and enable the service, the `fetch-asn` helper and the manual pages. The output in `dist/` is the `.deb` files, a `.tar.gz` per architecture with the bare binary, and `SHA256SUMS`.

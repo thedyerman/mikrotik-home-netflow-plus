@@ -132,7 +132,7 @@ function LiveFlows({ device, compact = false }: { device?: number; compact?: boo
   const maxDown = Math.max(curDown, scale.current.down * decay);
   const maxUp = Math.max(curUp, scale.current.up * decay);
   const tbodyRef = useRef<HTMLTableSectionElement>(null);
-  useFlip(tbodyRef, rows.list);
+  useFlip(tbodyRef);
   const th = (key: SortKey, label: string) => (
     <th className="num">
       <button type="button" className={"th-sort" + (sort === key ? " on" : "")} onClick={() => setSort(key)} aria-pressed={sort === key}>{label}</button>
