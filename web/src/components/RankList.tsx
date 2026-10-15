@@ -28,7 +28,7 @@ export function RankList({ items, unit, onSelect, empty = "Nothing yet", limit }
   const max = live ? ranked.max : Math.max(1, ...items.map((i) => i.down + i.up));
   const units = useRef(new UnitHold()).current;
   const listRef = useRef<HTMLOListElement>(null);
-  useFlip(listRef, shown);
+  useFlip(listRef);
 
   if (shown.length === 0) return <div className="empty small">{empty}</div>;
   const fmt = (key: string, v: number) => {

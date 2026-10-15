@@ -192,7 +192,7 @@ function RankPanel({ title, note, items, unit, dots }: { title: string; note?: s
   const max = ranked.max;
   const units = useRef(new UnitHold()).current;
   units.forget(new Set(shown.map((it) => `${it.id}:${it.label}`)));
-  useFlip(ref, shown);
+  useFlip(ref);
   return (
     <>
       <div className="dash-panel-head">

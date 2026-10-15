@@ -111,6 +111,7 @@ Do not put the password in the URL.
 | Red "Collector unreachable" banner | Same cause, but it worked before: the collector is down or restarting. The page recovers by itself |
 | "Today" shows dashes | The collector is older than 1.1.0. Upgrade it |
 | The two big figures stay at 0.0 while the lists and clock move | The collector is older than 1.2.2. Kiosk players that render off-screen never deliver animation frames, which earlier versions used to move the figures. Upgrade it |
+| Rows in the lists keep sliding a little although their order has not changed | The collector is older than 1.2.3. Upgrade it |
 | The page is the full web interface, not the wall display | The URL is missing `/dashboard` |
 | Text is too small to read from where you sit | Add `?rotate=true` |
 | A password prompt appears on the screen | The collector has a web password. See [above](#if-the-web-interface-has-a-password) |
